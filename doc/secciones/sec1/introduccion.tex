@@ -1,0 +1,27 @@
+\section{Introducción}
+
+Esta es la tercera práctica de la asignatura \textit{Inteligencia de Negocio}, impartida en la Universidad de Granada, en el primer semestre del curso 2025/2026.
+
+En esta práctica se propone participar en una competición de la página Zindi, en la que... 
+
+% -------------------------------------------------------------------------------------------------------------------------------------------------- %
+
+\subsection{Descripción del problema}
+
+El problema tratado se denomina `\href{https://zindi.africa/competitions/zindiweekendz-learning-urban-air-pollution-challenge}{Urban Air Pollution Challenge}'. El objetivo de este es predecir la concentración de materia particulada PM2.5 en el aire cada día para cada ciudad a partir de indicadores meteorológicos y datos de observación satelital.
+
+Para ello, disponemos de un conjunto de datos tabulares, interpretados \href{https://zindi.africa/competitions/zindiweekendz-learning-urban-air-pollution-challenge/data}{aquí}. Estos han sido recogidos durante un periodo de 3 meses en distintas ciudades del globo. Este \textit{dataset} no está completo al 100\%: algunas localizaciones no tienen lecturas para un día en particular, y hay muchos datos vacíos (especialmente en los datos de CH4).
+ 
+% -------------------------------------------------------------------------------------------------------------------------------------------------- %
+
+\subsection{Software y estructura del proyecto}
+
+Trabajaremos con Python, concretamente con \textbf{marimo} \cite{Agrawal_marimo_-_an_2023}, que proporciona un entorno interactivo y reproducible para la creación de cuadernos ejecutables. Esta herramienta permite combinar código, texto y visualizaciones de forma declarativa, facilitando tanto la exploración como la documentación del proceso de desarrollo.
+
+Para gestionar las dependencias y el entorno del proyecto se ha usado el gestor de paquetes \textbf{uv} \cite{uv}, que ofrece un sistema de resolución y aislamiento extremadamente rápido. Además, uv permite crear entornos virtuales ligeros, instalar versiones específicas de paquetes y reproducir configuraciones de forma determinista, asegurando así la portabilidad y la consistencia del entorno de ejecución en distintas máquinas.
+
+Se ha creado un cuaderno para caso de estudio: \code{caseA.py} y \code{caseB.py}, en el directorio \code{notebooks/}. Para ejecutar uno de estos, solo debe ejecutar el siguiente comando desde el directorio del proyecto:
+
+\begin{lstlisting}[language=bash, backgroundcolor=\color{backcolour}, basicstyle=\ttfamily\footnotesize, frame=single]
+uv run marimo edit notebooks/caseA.py
+\end{lstlisting}

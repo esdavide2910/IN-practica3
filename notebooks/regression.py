@@ -43,9 +43,22 @@ def _():
 
     #
     from sklearn.model_selection import KFold
-    from xgboost import XGBRegressor
     from sklearn.metrics import root_mean_squared_error
-    return (pl,)
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import IterativeImputer
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+    return (
+        ColumnTransformer,
+        HistGradientBoostingRegressor,
+        IterativeImputer,
+        KFold,
+        StandardScaler,
+        np,
+        pl,
+    )
 
 
 @app.cell
@@ -116,42 +129,118 @@ def _(casting, df_test_raw, pl):
 
 
 @app.cell
-def _():
-    return
+def _(df_test, df_train):
+    X_train = df_train[:, 7:73]
+    X_test = df_test[:, 2:68]
 
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    # 3. División de datos
-    """)
-    return
+    y_train = df_train['target']
+    return X_test, X_train
 
 
 @app.cell
 def _(df_test, df_train):
-    X_train = df_train[:, 7:].to_numpy()
-    X_test = df_test[:, 2:].to_numpy()
-    return
+    X_train = df_train[:, 7:73].to_numpy()
+    X_test = df_test[:, 2:68].to_numpy()
+
+    y_train = df_train['target'].to_numpy()
+    return X_test, X_train
 
 
 @app.cell
-def _(df_train):
-    y_train = df_train['target'].to_numpy()
-    return
+def _(ColumnTransformer, StandardScaler, X_test, X_train, pl):
+    columns_to_scale = []
+    for col_name, col_type in X_test.schema.items():
+        if col_type in (pl.Float32, pl.Float64):
+            columns_to_scale.append(col_name)
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('norm', StandardScaler(), columns_to_scale)
+        ],
+        remainder='passthrough'  # Mantener las demás columnas
+    )
+
+    X_train_norm = preprocessor.fit_transform(X_train)
+    X_test_norm = preprocessor.transform(X_test)
+    return X_test_norm, X_train_norm
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    # 4. Selección del modelo
+    ## 3.x. Imputación de valores
     """)
     return
 
 
 @app.cell
-def _():
+def _(HistGradientBoostingRegressor, IterativeImputer, X_train_norm):
+    imputer = IterativeImputer(
+        estimator=HistGradientBoostingRegressor(),
+        random_state=42,
+        verbose=2
+    )
+    X_imputed_train = imputer.fit_transform(X_train_norm) 
+    return (imputer,)
+
+
+@app.cell
+def _(X_test_norm, imputer):
+    X_imputed_test = imputer.transform(X_test_norm)
     return
+
+
+@app.cell
+def _(KFold, X, lgb, mean_squared_error, np, y_log):
+    # 2. Configuración de la Validación Cruzada
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    oof_predictions = np.zeros(len(X)) # Out-of-fold predictions
+    models = []
+
+    # Parámetros básicos de LightGBM
+    lgb_params = {
+        'objective': 'regression',
+        'metric': 'rmse',
+        'verbosity': -1,
+        'boosting_type': 'gbdt',
+        'learning_rate': 0.05,
+        'num_leaves': 31,
+        'feature_fraction': 0.8,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 5,
+        'device': 'cpu' # Cambia a 'gpu' si tienes una disponible
+    }
+
+    print("Iniciando Entrenamiento con 5-Folds...")
+
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X, y_log)):
+        X_train, X_val = X[train_idx], X[val_idx]
+        y_train, y_val = y_log[train_idx], y_log[val_idx]
+    
+        # Crear datasets de LightGBM
+        dtrain = lgb.Dataset(X_train, label=y_train)
+        dval = lgb.Dataset(X_val, label=y_val, reference=dtrain)
+    
+        # Entrenar modelo
+        model = lgb.train(
+            lgb_params,
+            dtrain,
+            num_boost_round=1000,
+            valid_sets=[dtrain, dval],
+            valid_names=['train', 'valid'],
+            callbacks=[lgb.early_stopping(stopping_rounds=50), lgb.log_evaluation(100)]
+        )
+    
+        # Guardar predicciones y modelo
+        oof_predictions[val_idx] = model.predict(X_val)
+        models.append(model)
+        print(f"Fold {fold+1} completado.")
+
+    # 3. Evaluación Final (RMSLE Global)
+    # Como predijimos en log, calculamos el RMSE de los logs directamente
+    rmsle_score = np.sqrt(mean_squared_error(y_log, oof_predictions))
+    print(f"\n--- SCORE CV RMSLE: {rmsle_score:.5f} ---")
+    return (X_train,)
 
 
 @app.cell
@@ -159,6 +248,11 @@ def _(mo):
     mo.md(r"""
     # 5.
     """)
+    return
+
+
+@app.cell
+def _():
     return
 
 

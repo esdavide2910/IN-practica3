@@ -1,0 +1,116 @@
+\documentclass[a4paper, 12pt]{article}
+
+% ---------  ---------------------------
+% Configuración general del documento
+% --------------------------------------
+% Define tamaño de papel y márgenes
+\usepackage[left=2.25cm, right=2.25cm, top=2.5cm, bottom=2.5cm]{geometry}
+% Espaciado entre párrafos
+\setlength{\parskip}{0.5em plus 0.2em minus 0.1em}
+
+% --------------------------------------
+% Paquetes básicos
+% --------------------------------------
+% Hipervínculos en el PDF
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, pdfborder={0 0 0}]{hyperref}
+% Codificación UTF-8 y caracteres especiales
+\usepackage[utf8]{inputenc} 
+% Idioma del documento
+\usepackage[spanish]{babel}
+\decimalpoint % Punto como separador decimal
+% Definición y uso de colores
+\usepackage{xcolor}
+% Símbolos matemáticos
+\usepackage{amsmath}
+
+% --------------------------------------
+% Paquetes adicionales
+% --------------------------------------
+% Cajas de color y resaltado de texto
+\usepackage[breakable]{tcolorbox}
+% Marcos personalizables con TikZ
+\usepackage[framemethod=TikZ]{mdframed}
+% Permite romper URLs muy largas automáticamente
+\usepackage{xurl} 
+% Mejoras para subrayado y resaltado de texto
+\usepackage{soul}
+% Captions para subfiguras
+\usepackage{subcaption}
+% ... tablas
+\usepackage{booktabs}
+\usepackage{multirow}
+\addto\captionsspanish{
+  \renewcommand{\tablename}{Tabla}
+  \renewcommand{\listtablename}{Índice de tablas}
+}
+%
+\usepackage{listings}
+%
+\usepackage{placeins}
+
+% --------------------------------------
+% Configuraciones personalizadas
+% --------------------------------------
+% Declara un nuevo comando para formato de código
+\definecolor{lightgray}{gray}{0.9}
+\sethlcolor{lightgray}
+\newcommand{\code}[1]{\hl{\texttt{#1}}}
+
+% --------------------------------------
+% Citaciones
+% --------------------------------------
+% Gestión de bibliografía con estilo IEEE y referencias numéricas
+\usepackage[style=ieee, citestyle=numeric-comp, backend=biber, backref=true, maxnames=99]{biblatex}
+% Traducción de algunos textos al español
+\DefineBibliographyStrings{spanish}{
+   backrefpage = {Citado en pág.},
+   backrefpages = {Citado en págs.},
+   url = {URL},
+}
+% Evita desbordes de línea en bibliografía
+\appto{\bibsetup}{\sloppy}
+% Archivo de bibliografía
+\addbibresource{bibliografia.bib}
+%
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.95}
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    basicstyle=\ttfamily\footnotesize,
+    xleftmargin=0.5em,
+    frame=single,
+}
+\lstset{style=mystyle}
+
+% --------------------------------------
+% Documento
+% --------------------------------------
+\begin{document}
+
+    \thispagestyle{empty}
+    
+    \input{portada/portada}
+    
+    % ----------------------------------------------
+    
+    \pagenumbering{roman}
+    
+    \tableofcontents
+    \newpage
+
+    % ----------------------------------------------
+
+    \pagenumbering{arabic}
+    
+    \input{secciones/sec1/introduccion.tex}
+    \input{secciones/sec2/experimentacion.tex}
+    \newpage
+
+    % ----------------------------------------------
+
+    \nocite{*}
+    \printbibliography
+
+\end{document}

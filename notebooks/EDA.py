@@ -271,6 +271,12 @@ def _():
 
 
 @app.cell
+def _(df_train):
+    df_train.columns
+    return
+
+
+@app.cell
 def _():
     return
 
