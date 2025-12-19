@@ -136,7 +136,7 @@ def _(df_train, pl):
             .rename({'column_0':"Valores nulos"})
             .filter(pl.col('Valores nulos')>0)
         )
-    
+
         return df_train_null_count
 
     _()
@@ -227,7 +227,7 @@ def _(mo):
 def _(df_train, pl):
     def _():
         df_counts = df_train.group_by('Place_ID').agg(pl.len().alias('count'))
-    
+
         percentiles = df_counts.select(
             *[pl.col('count').quantile(p).alias(f'percentile_{int(p*100)}') 
               for p in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]]
@@ -271,9 +271,22 @@ def _():
 
 
 @app.cell
-def _(df_train):
-    df_train.columns
+def _(df_train, pl, px):
+    _df_train = df_train.with_columns(
+        pl.col('target').log1p().alias('target_log')
+    )
+    _df_train['target','target_log']
+    _fig = px.histogram(_df_train, x="target_log", nbins=100, log_y=True)
+    _fig.show()
     return
+
+
+app._unparsable_cell(
+    r"""
+        df_train.columns
+    """,
+    name="_"
+)
 
 
 @app.cell

@@ -256,3 +256,9 @@ doc/**/.bak
 doc/**/.mtc
 doc/**/*-SAVE-ERROR
 doc/build/
+
+# Results
+submission/**
+
+# Models
+models/**
