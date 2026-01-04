@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.4"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -51,8 +51,8 @@ def _():
     import torch.nn as nn
     import torch.nn.functional as F
     from torch.utils.data import Dataset, DataLoader
-    from sklearn.model_selection import KFold
-    import lightgbm as lgb
+    from sklearn.model_selection import StratifiedKFold
+    import xgboost as xgb
     from sklearn.metrics import root_mean_squared_error
 
     #
@@ -64,9 +64,8 @@ def _():
     return (
         DataLoader,
         Dataset,
-        KFold,
+        StratifiedKFold,
         go,
-        lgb,
         math,
         nn,
         np,
@@ -76,6 +75,7 @@ def _():
         time,
         torch,
         train_test_split,
+        xgb,
     )
 
 
@@ -293,7 +293,7 @@ def _(
     X_train = _null_mask_transformer.fit_transform(df_X_train_norm)
     X_test = _null_mask_transformer.transform(df_X_test_norm)
 
-    y_labels = pl.Series(df_y_train).qcut(10)
+    y_labels = pl.Series(df_y_train).qcut(20)
     y_train = df_y_train.to_numpy()
 
     X_train, X_val, y_train, y_val = train_test_split(
@@ -319,106 +319,6 @@ def _(mo):
 
 @app.cell
 def _(nn):
-    # class ResidualBlock(nn.Module):
-    #     def __init__(self, in_features, out_features, dropout_rate=0.2):
-    #         super().__init__()
-
-    #         self.bn1 = nn.BatchNorm1d(in_features)
-    #         self.linear1 = nn.Linear(in_features, out_features)
-
-    #         self.bn2 = nn.BatchNorm1d(out_features)
-    #         self.linear2 = nn.Linear(out_features, out_features)
-
-    #         self.dropout = nn.Dropout(dropout_rate)
-    #         self.activation = nn.SiLU()
-
-    #         self.skip = (
-    #             nn.Linear(in_features, out_features)
-    #             if in_features != out_features
-    #             else nn.Identity()
-    #         )
-
-    #         # Inicialización residual estable
-    #         nn.init.zeros_(self.linear2.weight)
-    #         nn.init.zeros_(self.linear2.bias)
-
-    #     def forward(self, x):
-    #         identity = self.skip(x)
-
-    #         out = self.bn1(x)
-    #         out = self.activation(out)
-    #         out = self.linear1(out)
-
-    #         out = self.bn2(out)
-    #         out = self.activation(out)
-    #         out = self.linear2(out)
-
-    #         out = self.dropout(out)
-
-    #         return out + identity
-
-    # class EmbeddingNet(nn.Module):
-    #     def __init__(self, input_dim, embedding_dim=64):
-    #         super().__init__()
-
-    #         self.input_projection = nn.Sequential(
-    #             nn.Linear(input_dim, 256),
-    #             nn.BatchNorm1d(256),
-    #             nn.SiLU(),
-    #             nn.Dropout(0.3)
-    #         )
-
-    #         self.res_blocks = nn.ModuleList([
-    #             ResidualBlock(256, 128, dropout_rate=0.4),
-    #             ResidualBlock(128, embedding_dim, dropout_rate=0.4),
-    #         ])
-
-    #         self.embedding_norm = nn.BatchNorm1d(embedding_dim)
-    #         self.embedding_dropout = nn.Dropout(0.2)
-
-    #         self.regressor = nn.Sequential(
-    #             nn.Linear(embedding_dim, 64),
-    #             nn.BatchNorm1d(64),
-    #             nn.SiLU(),
-    #             nn.Dropout(0.2),
-    #             nn.Linear(64, 1)
-    #         )
-
-    #     def extract_feature(self, x):
-    #         x = self.input_projection(x)
-    #         for block in self.res_blocks:
-    #             x = block(x)
-    #         x = self.embedding_norm(x)
-    #         x = self.embedding_dropout(x)
-    #         return x
-
-    #     def forward(self, x):
-    #         return self.regressor(self.extract_feature(x))
-
-    #     def get_layer_groups(self):
-    #         """
-    #         Grupos de capas para discriminative learning rates
-    #         (de más cercano al input a más cercano al output)
-    #         """
-
-    #         return [
-    #             # Grupo 1: Proyección inicial (muy estable)
-    #             self.input_projection.parameters(),
-
-    #             # Grupo 2: Encoder residual (feature extractor)
-    #             self.res_blocks.parameters(),
-
-    #             # Grupo 3: Normalización del embedding
-    #             self.embedding_norm.parameters(),
-
-    #             # Grupo 4: Regressor hidden layers
-    #             list(self.regressor[:-1].parameters()),
-
-    #             # Grupo 5: Capa final (salida)
-    #             self.regressor[-1].parameters()
-    #         ]
-
-
     class EmbeddingNet(nn.Module):
         def __init__(self, input_dim, embedding_dim=64):
             super().__init__()
@@ -428,21 +328,21 @@ def _(nn):
 
                 nn.BatchNorm1d(input_dim),
 
-                # nn.Linear(input_dim, 256),
-                # nn.BatchNorm1d(256),
-                # nn.SiLU(),
-                # nn.Dropout(p=0.35),
+                nn.Linear(input_dim, 128),
+                nn.BatchNorm1d(128),
+                nn.SiLU(),
+                nn.Dropout(p=0.3),
 
-                nn.Linear(input_dim, 64),
+                nn.Linear(128, 64),
                 nn.BatchNorm1d(64),
                 nn.SiLU(),
-                nn.Dropout(p=0.2),
+                nn.Dropout(p=0.3),
 
                 # Reducción al espacio del embedding
                 nn.Linear(64, embedding_dim),
                 nn.BatchNorm1d(embedding_dim),
-                nn.SiLU(),
-                nn.Dropout(p=0.4),
+                #nn.SiLU(),
+                #nn.Dropout(p=0.3),
             )
 
             # 2. El Regresor con ResNet blocks
@@ -451,7 +351,7 @@ def _(nn):
                 nn.Linear(embedding_dim, 64),
                 nn.BatchNorm1d(64),
                 nn.SiLU(),
-                nn.Dropout(p=0.4),
+                nn.Dropout(p=0.3),
 
                 nn.Linear(64, 64),
                 nn.BatchNorm1d(64),
@@ -600,7 +500,7 @@ def _(
 
         # Print de progreso ---------------------------------------------------
         _epoch_time = (time.time() - _start_time) * 1000
-        print(f"Epoch {epoch+1:3d} | Train: {_avg_train_rmse_loss:.4f} | Val: {_avg_valid_rmse_loss:.4f} | {int(_epoch_time):4d}ms {status}")
+        print(f"Epoch {epoch+1:3d}  |  Train: {_avg_train_rmse_loss:.4f}  |  Val: {_avg_valid_rmse_loss:.4f} | {int(_epoch_time):4d}ms {status}")
 
     # Restaura los pesos del modelo con menor pérdida en validación -----------
     model.load_state_dict(torch.load("models/best_model_B1.pth"))
@@ -673,12 +573,6 @@ def _(AirPollutionDataset, BATCH_SIZE, DataLoader, X_test, model, np, torch):
 
 
 @app.cell
-def _(y_test_preds):
-    y_test_preds
-    return
-
-
-@app.cell
 def _(df_test, pl, y_test_preds):
     results_test = df_test.select(
         pl.col('Place_ID X Date'),
@@ -686,13 +580,13 @@ def _(df_test, pl, y_test_preds):
     )
     results_test.write_csv("submission/submission_3.csv")
     results_test
-    return (results_test,)
+    return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    # 6. Modelo con LightGBM
+    # 6. Modelo con XGBoost
     """)
     return
 
@@ -723,51 +617,70 @@ def _(model, np, torch, train_loader, valid_loader):
             return X_emb, y_emb
         return X_emb
 
-    # --- 2. Extracción de datos procesados ---
     X_train_emb, y_train_emb = get_embeddings(model, train_loader, has_targets=True)
     X_val_emb, y_val_emb = get_embeddings(model, valid_loader, has_targets=True)
-
-    # Unimos para el Cross-Validation de Optuna
-    X_full_emb = np.vstack([X_train_emb, X_val_emb])
-    y_full_emb = np.concatenate([y_train_emb, y_val_emb])
-    return X_full_emb, get_embeddings, y_full_emb
+    return X_train_emb, X_val_emb, get_embeddings, y_train_emb, y_val_emb
 
 
 @app.cell
-def _(KFold, X_full_emb, lgb, np, optuna, root_mean_squared_error, y_full_emb):
+def _(
+    StratifiedKFold,
+    X_train_emb,
+    X_val_emb,
+    np,
+    optuna,
+    root_mean_squared_error,
+    xgb,
+    y_train_emb,
+    y_val_emb,
+):
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+    FIXED_PARAMS = {
+        "objective": "reg:squarederror",
+        "eval_metric": "rmse",
+        "tree_method": "hist",
+        "device": "cuda",
+        "booster": "gbtree",
+        "verbosity": 0,
+        "random_state": 42,
+        "n_jobs": -1,
+        "early_stopping": 30,
+    }
+
     def objective(trial, X, y):
-        param = {
-            'objective': 'regression',
-            'metric': 'rmse',
-            'boosting_type': 'gbdt',
-            'verbosity': -1,
-            'num_leaves': trial.suggest_int('num_leaves', 32, 256),
-            'max_depth': trial.suggest_int('max_depth', 5, 15), 
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
-            'feature_fraction': trial.suggest_float('feature_fraction', 0.4, 1.0),
-            'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+    
+        tuned_params = {
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 800, 1000),
+            "subsample": trial.suggest_float("subsample", 0.6, 0.9),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 0.9),
+            "max_depth": trial.suggest_int("max_depth", 4, 7),
+            "min_child_weight": trial.suggest_int("min_child_weight", 1, 20),
+            "gamma": trial.suggest_float("gamma", 1, 5),
         }
 
-        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        param = {**FIXED_PARAMS, **tuned_params}
+    
+        n_bins = 10
+        quantiles = np.quantile(y, q=np.linspace(0, 1, n_bins + 1))
+        y_binned = np.digitize(y, quantiles[1:-1])
+
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         rmse_scores = []
 
-        for train_idx, val_idx in kf.split(X):
+        for train_idx, val_idx in skf.split(X, y_binned):
             X_t, X_v = X[train_idx], X[val_idx]
             y_t, y_v = y[train_idx], y[val_idx]
 
-            lgb_reg = lgb.LGBMRegressor(**param)
-            lgb_reg.fit(
+            xgb_reg = xgb.XGBRegressor(**param)
+            xgb_reg.fit(
                 X_t, y_t,
                 eval_set=[(X_v, y_v)],
-                callbacks=[
-                    lgb.early_stopping(stopping_rounds=10, verbose=0),
-                    lgb.log_evaluation(0)
-                ]
+                verbose=False
             )
 
-            preds = lgb_reg.predict(X_v)
+            preds = xgb_reg.predict(X_v)
             rmse = root_mean_squared_error(y_v, preds)
             rmse_scores.append(rmse)
 
@@ -776,42 +689,52 @@ def _(KFold, X_full_emb, lgb, np, optuna, root_mean_squared_error, y_full_emb):
     # Ejecutar el estudio
     study = optuna.create_study(direction='minimize')
     study.optimize(
-        lambda trial: objective(trial, X_full_emb, y_full_emb), 
+        lambda trial: objective(trial, np.vstack([X_train_emb, X_val_emb]), np.hstack([y_train_emb, y_val_emb])), 
         n_trials=20,
         show_progress_bar=True
     )
-    return (study,)
+    return FIXED_PARAMS, study
 
 
 @app.cell
-def _(study):
+def _(FIXED_PARAMS, study):
     print("Mejores hiperparámetros:", study.best_params)
     print("Mejor RMSE:", study.best_value)
-    return
+    best_params = {**FIXED_PARAMS, **study.best_params}
+    return (best_params,)
 
 
 @app.cell
-def _(X_full_emb, get_embeddings, lgb, model, study, test_loader, y_full_emb):
-    best_params = study.best_params
+def _(
+    X_train_emb,
+    X_val_emb,
+    best_params,
+    get_embeddings,
+    model,
+    np,
+    test_loader,
+    xgb,
+    y_train_emb,
+    y_val_emb,
+):
+    final_model = xgb.XGBRegressor(**best_params)
+    final_model.fit(np.vstack([X_train_emb, X_val_emb]), np.hstack([y_train_emb, y_val_emb]))
 
-    final_model = lgb.LGBMRegressor(**best_params, n_estimators=1000, random_state=42)
-    final_model.fit(X_full_emb, y_full_emb)
-
-    # b. Extraer embeddings de Test
+    # Extraer embeddings de Test
     X_test_emb = get_embeddings(model, test_loader, has_targets=False)
 
-    # c. Predicción final con LightGBM
+    # Predicción final con XGBoost
     test_preds = final_model.predict(X_test_emb)
     return (test_preds,)
 
 
 @app.cell
-def _(df_test, pl, results_test, test_preds):
+def _(df_test, pl, test_preds):
     results_test2 = df_test.select(
         pl.col('Place_ID X Date'),
         pl.lit(test_preds).alias('target')
     )
-    results_test.write_csv("submission/submission_4.csv")
+    results_test2.write_csv("submission/submission_10.csv")
     results_test2
     return
 
