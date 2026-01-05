@@ -56,6 +56,9 @@
 \sethlcolor{lightgray}
 \newcommand{\code}[1]{\hl{\texttt{#1}}}
 
+\usepackage{array}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
 % --------------------------------------
 % Citaciones
 % --------------------------------------
@@ -84,6 +87,10 @@
 }
 \lstset{style=mystyle}
 
+
+
+
+
 % --------------------------------------
 % Documento
 % --------------------------------------
@@ -105,7 +112,8 @@
     \pagenumbering{arabic}
     
     \input{secciones/sec1/introduccion.tex}
-    \input{secciones/sec2/experimentacion.tex}
+    \input{secciones/sec2/eda.tex}
+    \input{secciones/sec3/experimentacion.tex}
     \newpage
 
     % ----------------------------------------------

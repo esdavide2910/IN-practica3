@@ -1,0 +1,50 @@
+\section{Análisis exploratorio de datos}
+
+Primero, se ha realizado un análisis exploratorio de los datos (véase en más detalle en el cuaderno \code{EDA.py}). Algunas consideraciones relevantes son:
+
+\begin{itemize}
+    \item El conjunto de entrenamiento tiene 30 557 registros, con identificadores, características y valor objetivo.
+    \item El conjunto test tiene 16 136 registros, con identificadores y características.
+    \item Hay un total de 74 características, correspondientes a los indicadores meteorológicos.
+    \item De las 74 características, 68 tienen valores nulos, tanto en el conjunto entrenamiento como en test. De ellas:
+    \begin{itemize}
+        \item 35 son nulas en menos de un 7\% de los registros,
+        \item 26 son nulas en más del 7\% y menos del 28\% de los registros, y
+        \item 7 (las referentes a `CH4') son nulas en más del 80\% de los registros.
+    \end{itemize}
+
+    \item El rango de fechas del conjunto de datos (tanto en entrenamiento como en test) va del 2 de enero al 4 de abril, haciendo un periodo total de 94 días (véase en la Figura \ref{fig:dates_distribution}).
+    \item Existe aproximadamente el mismo número de registros de cada fecha en el conjunto de entrenamiento. 
+    \item Tanto el conjunto de datos de entrenamiento como el de test tienen aproximadamente la misma proporción de ejemplos de cada fecha.
+    
+\begin{figure}[h!]
+    \centering
+    \fbox{\includegraphics[width=0.9\textwidth, keepaspectratio]{secciones/sec2/imagenes/dates_distribution.png}}
+    \caption{
+        Gráfico de líneas temporal con las fechas del conjunto de entrenamiento y test.
+    }
+    \label{fig:dates_distribution}
+\end{figure}
+
+    \item Hay 340 localizaciones distintas en el conjunto de entrenamiento. Cabe comentar:
+    \begin{itemize}
+        \item Más del 50\% de ellas tienen registros en cada uno de los 94 días.
+        \item Más del 95\% de localizaciones tienen al menos 69 registros.
+        \item El mínimo número de registros de una localización es 3.
+    \end{itemize}
+    En el conjunto test se repite este patrón, si bien el número mínimo de registros para una localización es 24. 
+    
+    \item No se repiten localizaciones del conjunto de entrenamiento en test.
+    
+    \item Los valores objetivo presentan asimetría positiva (véase la Figura \ref{fig:target_values}): la mayoría de valores se concentran en valores bajos (PM2.5 $<200$), pero existe un pequeño grupo con valores extremadamente altos.
+    
+\end{itemize}
+
+\begin{figure}[h!]
+    \centering
+    \fbox{\includegraphics[width=0.9\textwidth, keepaspectratio]{secciones/sec2/imagenes/target_distribution.png}}
+    \caption{
+        Histograma de valores objetivo del conjunto de entrenamiento.
+    }
+    \label{fig:target_values}
+\end{figure}

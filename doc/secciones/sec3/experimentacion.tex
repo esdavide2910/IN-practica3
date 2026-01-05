@@ -1,26 +1,68 @@
 \section{Experimentación}
 
-
 \renewcommand{\arraystretch}{1.4}
 \begin{table}[h!]
     \small
     \centering
-    \begin{tabular}{ccrrrrl}
+    \begin{tabular}{ccrrrrp{6.5cm}}
     \toprule
-    Estrategia & Intento & \multicolumn{1}{c}{Fecha} & \multicolumn{1}{c}{Hora} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Train\\[-0.8ex] Score\end{tabular}} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Test\\[-0.8ex] Score\end{tabular}} & Nota\\ \hline
-    \multirow{2}{*}{A} & 1 & 17 dic. & 20:57 & 34.52 & 38.42 & Cross-validation \\
-    & 2 & 18 dic. & 11:12 & 28.08 & 34.28 & Cross-validation\\ \hline
-    \multirow{2}{*}{B} & 3 & 19 dic. & 13:46 & 18.30 & 34.39 & No\\
-    & 4 & 19 dic. & 14:13 & 18.27 & 34.00 & Cross-validation\\
-    &  &  &  &  &  & \\
-    &  &  &  &  &  & \\
+    Intento & Estrategia & \multicolumn{1}{c}{Fecha} & \multicolumn{1}{c}{Hora} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Train\\[-0.8ex] Score\end{tabular}} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Test\\[-0.8ex] Score\end{tabular}} & Descripción\\ \hline
+    1 & A & 17 dic. & 20:57 & 34.52 & 38.42 & LightGBM con las características de densidad \\
+    2 & A & 18 dic. & 11:12 & 28.08 & 34.28 & LightGBM con todas las características \\ 
+    3 & B & 19 dic. & 13:46 & 18.30 & 34.39 & Red neuronal\\
+    4 & B & 19 dic. & 14:13 & 18.27 & 34.00 & Encoder neuronal y predicción con LightGBM\\ 
+    5 & C & 2 ene. & 15:33 & 27.31 & 34.19 & XGBoost\\
+    6 & C & 2 ene. & 19:33 & 30.15 & 35.07 & XGBoost con salidas logarítmicas\\
+    7 & C & 2 ene. & 20:14 & 27.28 & 35.99 & XGBoost con profundidad limitada a 6\\
+    8 & C & 3 ene. & 00:12 & 27.43 & 36.04 & XGBoost con profundidad limitada a 6 y con salidas logarítmicas\\
+    9 & - & 3 ene. & 00:55 & 28.13 & 34.46 & Código erróneo (solo usa red neuronal)\\
+    10 & B & 3 ene. & 01:18 & 28.12 & 35.21 & Encoder neuronal y predicción con XGBoost\\
+    11 & B & 4 ene. & 00:30 & 27.98 & 34.66 & Encoder neuronal y predicción con LightGBM, incluyendo día de la semana. Embedding de 64 características.\\
+    12 & B & 4 ene. & 00:50 & 28.15 & 34.52 & Encoder neuronal y predicción con LightGBM, incluyendo día de la semana. Embedding de 32 características.\\
+    13 & B & 4 ene. & 01:03 & 26.94 & 34.54 & Encoder neuronal y predicción con LightGBM, incluyendo día de la semana. Embedding de 32 características. Emplea técnicas de regularización (mixup).\\
+    14 & B & 4 ene. & 14:42 & 27.08 & 32.78 & XGBoost con nueva estrategia de imputación\\
+    15 & B & 4 ene. & 16:16 & 26.82 & 34.22 & Encoder neuronal y predicción con XGBoost, incluyendo día de la semana, con nueva estrategia de imputación\\
+    16 & ... & 4 ene. & 16:21 & ... & 33.96 & ... \\
+    17 & ... & 5 ene. & 04:28 & 25.06 & 31.16 & ... \\
+    \bottomrule
+    \end{tabular}
+    % \caption{
+    %     Resultados de intentos
+    % }
+    % \label{tab:experiments_results}
+\end{table}
+
+
+\renewcommand{\arraystretch}{1.4}
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{C{2cm}C{3cm}C{3cm}C{3cm}C{3cm}}
+    \toprule
+    Intento & \multicolumn{1}{c}{Fecha} & \multicolumn{1}{c}{Hora} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Train \\[-0.8ex] Score\end{tabular}} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Test\\[-0.8ex] Score\end{tabular}} \\ \bottomrule
+
+    \multirow{2}{*}{15} & 4 ene. & 16:16 & 26.82 & 34.22 \\
+    & \multicolumn{4}{p{13.25cm}}{...} \\ \hline
+
+    \multirow{2}{*}{16} & 4 ene. & 16:21 & 28.21 & 33.96 \\
+    & \multicolumn{4}{p{13.25cm}}{...} \\ \hline
+
+    \multirow{2}{*}{17} & 5 ene. & 04:28 & 25.06 & 31.16 \\
+    & \multicolumn{4}{p{13.25cm}}{Se reconstruye la serie temporal completa para que cada ubicación tuviera una secuencia diaria completa en el periodo, se crean lags (retraso) de 1, 2 y 7 días de las variables climáticas para captar tendencias y ciclos, se normalizan todas las características, y se filtran los datos para recuperar la estructura original de la competición. Finalmente, se entrena un modelo XGBoost y se inferencia en test.} \\ \hline
+
+    \multirow{2}{*}{18} & 5 ene. & 13:13 & 24.92 & 31.05 \\
+    & \multicolumn{4}{p{13.25cm}}{Se reconstruye la serie temporal completa para que cada ubicación tuviera una secuencia diaria completa en el periodo, se crean lags (retraso) de 1, 2 y 7 días y \textbf{leads (adelanto) de 1 día} de las variables climáticas para captar tendencias y ciclos, se normalizan todas las características, y se filtran los datos para recuperar la estructura original de la competición. Finalmente, se entrena un modelo XGBoost y se inferencia en test.} \\ 
+
     \bottomrule
     \end{tabular}
     \caption{
-        Resultados de intentos
+        Resultados de los experimentos
     }
     \label{tab:experiments_results}
 \end{table}
+
+
+%------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 \subsection{Estrategia A: \textit{Baseline}}
 
@@ -37,7 +79,7 @@ Esta implementación incluye los siguientes elementos en el preprocesamiento de 
     \begin{itemize} 
         \item La columna \code{Place\_ID} se convierten a categórica (Categorical), lo cual es computacionalmente más eficiente que las cadenas de texto. 
         \item La columna \code{Date} se transforma al formato de fecha estricto (Date) para permitir su manejo en series temporales. 
-        \item Las variables relacionadas con el objetivo (\code{target}, \code{target\_min}, \code{target\_max}, etc.) se ajustan a enteros de 16 bits (Int16), suficientes para representar los niveles de concentración de PM2.5. 
+        \item Las variables relacionadas con el objetivo (\code{target}, \code{target\_min}, \code{target\_max}, etc.) se ajustan a enteros de 16 bits, suficientes para representar los niveles de concentración de PM2.5. 
         \item El resto de variables numéricas, que incluyen las mediciones satelitales y meteorológicas, se estandarizan a flotantes de 32 bits (Float32) mediante una iteración sobre las columnas restantes. 
     \end{itemize}
 
@@ -62,9 +104,9 @@ Para la elección de hiperparámetros:
 
 \begin{itemize}
     
-    \item \textbf{Cross-validation:} Se implementó una estrategia de validación cruzada de 10 particiones (K-Fold) con mezcla aleatoria de los datos (\code{shuffle=True}). En cada iteración del bucle, el conjunto de datos se divide en entrenamiento y validación; se utiliza el conjunto de validación para monitorizar el error y aplicar \textit{early stopping} (parada temprana) si el modelo no mejora tras 50 rondas, evitando así el sobreajuste.
+    \item \textbf{Cross-validation:} Se implementó una estrategia de validación cruzada de 10 particiones (K-Fold) con mezcla aleatoria de los datos. En cada iteración del bucle, el conjunto de datos se divide en entrenamiento y validación; se utiliza el conjunto de validación para monitorizar el error y aplicar \textit{early stopping} (parada temprana) si el modelo no mejora tras 50 rondas, evitando así el sobreajuste.
     
-    \item \textbf{Optimización de parámetros:} Se utilizó el framework Optuna para automatizar la búsqueda de la configuración óptima mediante optimización bayesiana. Se ejecutaron 50 experimentos (\code{n\_trials=50}) con el objetivo de minimizar la métrica RMSE. El espacio de búsqueda incluyó parámetros estructurales del árbol como el número de hojas (\code{num\_leaves}) y la profundidad máxima (\code{max\_depth}), así como parámetros de regularización y aprendizaje como el \code{learning\_rate} y \code{feature\_fraction}.
+    \item \textbf{Optimización de parámetros:} Se utilizó el framework Optuna para automatizar la búsqueda de la configuración óptima mediante optimización bayesiana. Se ejecutaron 50 experimentos (\code{n\_trials=50}) con el objetivo de minimizar la métrica RMSE. El espacio de búsqueda incluyó parámetros estructurales del árbol como el número de hojas y la profundidad máxima, así como parámetros de regularización y aprendizaje como la tasa de aprendizaje.
     
 \end{itemize}
 
@@ -78,8 +120,19 @@ No obstante, en ambos casos se observa una brecha considerable entre el rendimie
 
 % -------------------------------------------------------------------------------------------------------------------------------------------------- %
 
-\subsection{Estrategia B: Embedding de las características}
+\subsection{Estrategia B: Arquitectura Neuronal}
 
+Mientras que la Estrategia A se centraba en un preprocesamiento estadístico clásico (MICE) y un modelo de árboles puro, esta nueva aproximación utiliza \textit{Deep Learning} para la extracción automatizada de características e inferencia.
+
+
+
+
+arquitectura híbrida que emplea la representación de los datos (\textit{embeddings}) 
+
+
+% -------------------------------------------------------------------------------------------------------------------------------------------------- %
+
+\subsection{Estrategia C: XGBoost}
 
 
 % -------------------------------------------------------------------------------------------------------------------------------------------------- %
@@ -88,3 +141,5 @@ No obstante, en ambos casos se observa una brecha considerable entre el rendimie
 
 Parece razonable pensar que el valor del indicador PM2.5 de un día dependiera de los días previos en la misma localización, ya que ... ¿Cómo podemos ... ? 
 
+
+- Entrenar solo con características meteorológicas para obtener 
