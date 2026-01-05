@@ -26,6 +26,7 @@ def _(mo):
     # Add the source directory to the search Python path
     import sys
     sys.path.append(str(src_dir))
+    print(f"Versión de Python: {sys.version}")
     return (datasets_dir,)
 
 
@@ -46,13 +47,7 @@ def _():
     import plotly.graph_objects as go
 
     #
-    from sklearn.model_selection import train_test_split
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.utils.data import Dataset, DataLoader
     from sklearn.model_selection import StratifiedKFold
-
     from sklearn.metrics import root_mean_squared_error
 
     #
@@ -62,21 +57,21 @@ def _():
     #
     import warnings
     warnings.filterwarnings("ignore")
-    return StratifiedKFold, np, optuna, pl, plt, root_mean_squared_error, torch
+    return StratifiedKFold, np, optuna, pl, plt, root_mean_squared_error
 
 
 @app.cell
-def _(torch):
-    # Comprobar si CUDA está disponible
-    print(f"CUDA disponible: {torch.cuda.is_available()}")
+def _():
+    # # Comprobar si CUDA está disponible
+    # print(f"CUDA disponible: {torch.cuda.is_available()}")
 
-    # Ver el número de GPUs disponibles
-    print(f"Número de GPUs: {torch.cuda.device_count()}")
+    # # Ver el número de GPUs disponibles
+    # print(f"Número de GPUs: {torch.cuda.device_count()}")
 
-    # Ver el nombre de la GPU actual (si hay alguna)
-    if torch.cuda.is_available():
-        print(f"Nombre de la GPU: {torch.cuda.get_device_name(0)}")
-        print(f"ID de la GPU actual: {torch.cuda.current_device()}")
+    # # Ver el nombre de la GPU actual (si hay alguna)
+    # if torch.cuda.is_available():
+    #     print(f"Nombre de la GPU: {torch.cuda.get_device_name(0)}")
+    #     print(f"ID de la GPU actual: {torch.cuda.current_device()}")
     return
 
 
@@ -215,45 +210,6 @@ def _(mo):
 
 @app.cell
 def _():
-    # from sklearn.experimental import enable_iterative_imputer
-    # from sklearn.impute import IterativeImputer
-    # from sklearn.ensemble import HistGradientBoostingRegressor
-    # from sklearn.compose import ColumnTransformer
-
-    # # Columnas a eliminar (todas las que contienen CH4)
-    # _cols_to_drop = [c for c in numerical_features_cols if "CH4" in c]
-
-    # # Columnas a imputar (numéricas sin CH4)
-    # _cols_to_impute = [c for c in numerical_features_cols if "CH4" not in c]
-
-    # # Imputador iterativo
-    # imputer = IterativeImputer(
-    #     estimator=HistGradientBoostingRegressor(),
-    #     max_iter=5,
-    #     random_state=42,
-    #     verbose=2
-    # )
-    # imputer.set_output(transform="polars")
-
-    # # ColumnTransformer solo con las columnas a imputar
-    # _ct = ColumnTransformer(
-    #     [("imp", imputer, _cols_to_impute)], 
-    #     remainder="passthrough", 
-    #     verbose_feature_names_out=False
-    # )
-
-    # _ct.set_output(transform="polars")
-
-    # # Fit/transform sobre train y eliminar CH4
-    # df_X_train_2 = _ct.fit_transform(df_X_train_1).drop(_cols_to_drop)
-
-    # # Transform sobre test y eliminar CH4
-    # df_X_test_2 = _ct.transform(df_X_test_1).drop(_cols_to_drop)
-    return
-
-
-@app.cell
-def _(df_X_test_1, df_X_train_1, numerical_features_cols):
     from sklearn.preprocessing import FunctionTransformer
     from sklearn.experimental import enable_iterative_imputer
     from sklearn.impute import IterativeImputer, SimpleImputer
@@ -261,57 +217,52 @@ def _(df_X_test_1, df_X_train_1, numerical_features_cols):
     from sklearn.compose import ColumnTransformer
 
     # 
-    _cols_not_ch4 = [c for c in numerical_features_cols if "CH4" not in c]
-    _cols_ch4 = [c for c in numerical_features_cols if "CH4" in c]
-    _cols_rest = [c for c in df_X_train_1.columns if c not in _cols_not_ch4+_cols_ch4]
+    # _cols_not_ch4 = [c for c in numerical_features_cols if "CH4" not in c]
+    # _cols_ch4 = [c for c in numerical_features_cols if "CH4" in c]
+    # _cols_rest = [c for c in df_X_train_1.columns if c not in _cols_not_ch4+_cols_ch4]
 
-    # IterativeImputer para columnas numéricas sin CH4
-    iter_imp = IterativeImputer(
-        estimator=HistGradientBoostingRegressor(),
-        max_iter=5,
-        random_state=42,
-        verbose=2
-    )
-    iter_imp.set_output(transform="polars")
+    # # IterativeImputer para columnas numéricas sin CH4
+    # iter_imp = IterativeImputer(
+    #     estimator=HistGradientBoostingRegressor(),
+    #     max_iter=5,
+    #     random_state=42,
+    #     verbose=2
+    # )
+    # iter_imp.set_output(transform="polars")
 
-    # SimpleImputer + indicador para columnas CH4
-    simple_imp = SimpleImputer(strategy="median", add_indicator=True)
-    simple_imp.set_output(transform="polars")
+    # # SimpleImputer + indicador para columnas CH4
+    # simple_imp = SimpleImputer(strategy="median", add_indicator=True)
+    # simple_imp.set_output(transform="polars")
 
-    #
-    def _identity_order(X):
-        return X
+    # #
+    # def _identity_order(X):
+    #     return X
 
-    # ColumnTransformer combinando ambos imputers
-    _ct = ColumnTransformer(
-        transformers=[
-            ("pass", FunctionTransformer(_identity_order), _cols_rest),
-            ("iter_imp", iter_imp, _cols_not_ch4),
-            ("simple_imp", simple_imp, _cols_ch4)
-        ],
-        remainder="drop",
-        verbose_feature_names_out=False
-    )
-    # Usar salida Polars para ColumnTransformer
-    _ct.set_output(transform="polars")
+    # # ColumnTransformer combinando ambos imputers
+    # _ct = ColumnTransformer(
+    #     transformers=[
+    #         ("pass", FunctionTransformer(_identity_order), _cols_rest),
+    #         ("iter_imp", iter_imp, _cols_not_ch4),
+    #         ("simple_imp", simple_imp, _cols_ch4)
+    #     ],
+    #     remainder="drop",
+    #     verbose_feature_names_out=False
+    # )
+    # # Usar salida Polars para ColumnTransformer
+    # _ct.set_output(transform="polars")
 
-    #
-    df_X_train_2 = _ct.fit_transform(df_X_train_1)
-    #
-    df_X_test_2 = _ct.transform(df_X_test_1)
+    # #
+    # df_X_train_2 = _ct.fit_transform(df_X_train_1)
+    # #
+    # df_X_test_2 = _ct.transform(df_X_test_1)
+    return
+
+
+@app.cell
+def _(df_X_test_1, df_X_train_1):
+    df_X_train_2 = df_X_train_1
+    df_X_test_2 = df_X_test_1
     return df_X_test_2, df_X_train_2
-
-
-@app.cell
-def _(df_X_train_2):
-    df_X_train_2[:,65:]
-    return
-
-
-@app.cell
-def _(df_X_train_2):
-    df_X_train_2
-    return
 
 
 @app.cell
@@ -354,36 +305,6 @@ def _(df_X_train_3):
 @app.cell
 def _(df_X_test_3):
     df_X_test_3
-    return
-
-
-@app.cell
-def _():
-    # def apply_null_mask_and_fill(df: pl.DataFrame, cols: list) -> pl.DataFrame:
-
-    #     # Crear las máscaras: 1.0 si no es nulo, 0.0 si es nulo
-    #     mask_exprs = [
-    #         (pl.col(c).is_not_null().cast(pl.Float32)).alias(f"{c}_mask")
-    #         for c in cols
-    #     ]
-
-    #     df_transformed = df.with_columns(mask_exprs)
-
-    #     # Rellenar los nulos originales con 0.0
-    #     return df_transformed.fill_null(0.0)
-
-
-    # #
-    # null_cols = [
-    #     col
-    #     for col in df_X_train.columns
-    #     if df_X_train.select(pl.col(col).null_count()).item() > 0
-    #     or df_X_test.select(pl.col(col).null_count()).item() > 0
-    # ]
-
-    # #
-    # df_X_train_null_mask = apply_null_mask_and_fill(df_X_train, null_cols)
-    # df_X_test_null_mask = apply_null_mask_and_fill(df_X_test, null_cols)
     return
 
 
@@ -537,30 +458,30 @@ def _(
     y_train_binned,
 ):
     def _():
-    
+
         skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
 
         y_true = y_train
         y_pred = np.zeros(len(y_true))
-    
+
         for train_idx, val_idx in skf.split(X_train, y_train_binned):
             X_t, X_v = X_train[train_idx], X_train[val_idx]
             y_t, y_v = y_train[train_idx], y_train[val_idx]
-    
+
             model_LGBM = lgb.LGBMRegressor(**best_params_LGBM)
             model_LGBM.fit(
                 X_t, y_t,
                 eval_set=[(X_v, y_v)],
                 callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=0), lgb.log_evaluation(0)]
             )
-    
+
             y_pred[val_idx] = model_LGBM.predict(X_v)
-    
+
             error = y_pred - y_true
-    
+
         abs_error = np.abs(error)
         rel_error = abs_error / (y_true + 1e-6)
-    
+
         plt.scatter(y_true, y_pred, alpha=0.3)
         return plt.plot([0, max(y_train)], [0, max(y_train)], 'r--')
 
@@ -577,12 +498,21 @@ def _(mo):
 
 
 @app.cell
+def _(np, y_train):
+    y_norm = y_train / y_train.max()
+    weights = 1 + 5 * (y_norm ** 3)
+    weights = np.clip(weights, 1, 6)
+    return (weights,)
+
+
+@app.cell
 def _(
     StratifiedKFold,
     X_train,
     np,
     optuna,
     root_mean_squared_error,
+    weights,
     y_train,
     y_train_binned,
 ):
@@ -603,6 +533,16 @@ def _(
 
     def objective_XGB(trial, X, y, y_binned):
 
+        # tuned_params = {
+        #     "learning_rate": trial.suggest_float("learning_rate", 0.025, 0.3, log=True),
+        #     "n_estimators": trial.suggest_int("n_estimators", 1100, 1150),
+        #     "subsample": trial.suggest_float("subsample", 0.70, 0.75),
+        #     "colsample_bytree": trial.suggest_float("colsample_bytree", 0.65, 0.7),
+        #     "max_depth": trial.suggest_int("max_depth", 8, 9),
+        #     "min_child_weight": trial.suggest_int("min_child_weight", 3, 4),
+        #     "gamma": trial.suggest_float("gamma", 2.3, 2.4),
+        # }
+
         tuned_params = {
             "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
             "n_estimators": trial.suggest_int("n_estimators", 500, 1200),
@@ -622,11 +562,14 @@ def _(
             X_t, X_v = X[train_idx], X[val_idx]
             y_t, y_v = y[train_idx], y[val_idx]
 
+            w_t = weights[train_idx]
+
             model = xgb.XGBRegressor(**param)
             model.fit(
                 X_t, y_t,
                 eval_set=[(X_v, y_v)],
-                verbose=False
+                sample_weight=w_t,
+                verbose=False,
             )
 
             preds = model.predict(X_v)
@@ -639,7 +582,7 @@ def _(
     study_XGB = optuna.create_study(direction='minimize')
     study_XGB.optimize(
         lambda trial: objective_XGB(trial, X_train, y_train, y_train_binned), 
-        n_trials=20,
+        n_trials=30,
         show_progress_bar=True
     )
     return FIXED_PARAMS_XGB, study_XGB, xgb
@@ -666,6 +609,28 @@ def _(X_test, X_train, best_params_XGB, df_test, pl, xgb, y_train):
     )
     results_test_XGB.write_csv("submission/submission_14.csv")
     results_test_XGB
+    return (model_XGB,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Importancia de las características
+    """)
+    return
+
+
+@app.cell
+def _(df_X_train_3, model_XGB, pl):
+    # Suponiendo que X_train es un DataFrame para mantener los nombres de las columnas
+    importances = model_XGB.feature_importances_
+
+    # Crear un DataFrame con nombres de columnas y su importancia
+    feat_importances = pl.DataFrame({
+        'feature': df_X_train_3.columns,
+        'importance': importances
+    }).sort('importance', descending=True)
+    feat_importances
     return
 
 
@@ -684,44 +649,43 @@ def _(
     best_params_XGB,
     np,
     plt,
+    weights,
     xgb,
     y_train,
     y_train_binned,
 ):
     def _():
-    
+
         skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
 
         y_true = y_train
         y_pred = np.zeros(len(y_true))
-    
+
         for train_idx, val_idx in skf.split(X_train, y_train_binned):
             X_t, X_v = X_train[train_idx], X_train[val_idx]
             y_t, y_v = y_train[train_idx], y_train[val_idx]
-    
+
+            w_t = weights[train_idx]
+
             model_XGB = xgb.XGBRegressor(**best_params_XGB)
             model_XGB.fit(
                 X_t, y_t,
                 eval_set=[(X_v, y_v)],
+                sample_weight=w_t,
                 verbose=False
             )
-    
+
             y_pred[val_idx] = model_XGB.predict(X_v)
-    
+
             error = y_pred - y_true
-    
+
         abs_error = np.abs(error)
         rel_error = abs_error / (y_true + 1e-6)
-    
+
         plt.scatter(y_true, y_pred, alpha=0.3)
         return plt.plot([0, max(y_train)], [0, max(y_train)], 'r--')
 
     _()
-    return
-
-
-@app.cell
-def _():
     return
 
 

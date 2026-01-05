@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.4"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -26,14 +26,16 @@ def _(mo):
     # Add the source directory to the search Python path
     import sys
     sys.path.append(str(src_dir))
+    print(f"Versión de Python: {sys.version}")
     return (datasets_dir,)
 
 
 @app.cell
 def _():
     #
-    import warnings
-    warnings.filterwarnings("ignore")
+    import time
+    import math
+    from datetime import date
 
     #
     import polars as pl
@@ -47,16 +49,32 @@ def _():
     import plotly.graph_objects as go
 
     #
+    from sklearn.model_selection import StratifiedKFold
     from sklearn.metrics import root_mean_squared_error
-    from sklearn.model_selection import train_test_split
-    from sklearn.decomposition import PCA
-    from sklearn.model_selection import KFold
-    from pytorch_forecasting.models import TemporalFusionTransformer
-    import lightning.pytorch as lp
 
     #
     import optuna
-    return KFold, np, optuna, pl, root_mean_squared_error
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    #
+    import warnings
+    warnings.filterwarnings("ignore")
+    return StratifiedKFold, date, np, optuna, pl, plt, root_mean_squared_error
+
+
+@app.cell
+def _():
+    # # Comprobar si CUDA está disponible
+    # print(f"CUDA disponible: {torch.cuda.is_available()}")
+
+    # # Ver el número de GPUs disponibles
+    # print(f"Número de GPUs: {torch.cuda.device_count()}")
+
+    # # Ver el nombre de la GPU actual (si hay alguna)
+    # if torch.cuda.is_available():
+    #     print(f"Nombre de la GPU: {torch.cuda.get_device_name(0)}")
+    #     print(f"ID de la GPU actual: {torch.cuda.current_device()}")
+    return
 
 
 @app.cell
@@ -69,16 +87,34 @@ def _(mo):
 
 @app.cell
 def _(datasets_dir, pl):
+    # Carga los datos de entrenamiento
     df_train_raw = pl.read_csv(datasets_dir/"train.csv")
-    df_train_raw
+    df_train_raw 
     return (df_train_raw,)
 
 
 @app.cell
 def _(datasets_dir, pl):
+    # Carga los datos de test
     df_test_raw = pl.read_csv(datasets_dir/"test.csv")
     df_test_raw
     return (df_test_raw,)
+
+
+@app.cell
+def _(df_test_raw, df_train_raw):
+    # Identifica las columnas de características identificativas
+    id_features_cols = df_test_raw.columns[0:3]
+    print(f"Columnas de características identificativas: {id_features_cols}")
+
+    # Identifica las columnas de características numéricas
+    numerical_features_cols = df_test_raw.columns[3:]
+    print(f"Columnas de características numéricas: {numerical_features_cols}")
+
+    # Identifica las columnas de valores target
+    target_cols = df_train_raw.columns[3:8]
+    print(f"Columnas de valores objetivo: {target_cols}")
+    return (numerical_features_cols,)
 
 
 @app.cell
@@ -99,6 +135,7 @@ def _(mo):
 
 @app.cell
 def _(pl):
+    # Define un diccionario con nombres de columnas como key y tipo como valor
     casting = {
         "Place_ID X Date": pl.String,
         "Date": pl.Date,
@@ -114,7 +151,7 @@ def _(pl):
 
 @app.cell
 def _(casting, df_train_raw, pl):
-    #
+    # Castea cada columna al tipo especificado en el diccionario. Por defecto, castea a Float32
     df_train = df_train_raw.select([
         pl.col(col).cast(casting[col]) if col in casting else pl.col(col).cast(pl.Float32)
         for col in df_train_raw.columns
@@ -125,7 +162,7 @@ def _(casting, df_train_raw, pl):
 
 @app.cell
 def _(casting, df_test_raw, pl):
-    #
+    # Castea cada columna al tipo especificado en el diccionario. Por defecto, castea a Float32
     df_test = df_test_raw.select([
         pl.col(col).cast(casting[col]) if col in casting else pl.col(col).cast(pl.Float32)
         for col in df_test_raw.columns
@@ -137,263 +174,257 @@ def _(casting, df_test_raw, pl):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.2. División de datos en entrenamiento y test
+    ## 2.2. ...
     """)
     return
 
 
 @app.cell
-def _(df_test, df_train):
+def _(date, df_test, df_train, pl):
     #
-    df_X_train = df_train.drop(['Place_ID X Date', 'target_min','target_max','target_variance','target_count'])
+    all_dates = pl.date_range(date(2020, 1, 2), date(2020, 4, 4), "1d", eager=True).alias("Date")
+    all_places_train = df_train.select("Place_ID").unique()
+    all_places_test = df_test.select("Place_ID").unique()
+    return all_dates, all_places_test, all_places_train
+
+
+@app.cell
+def _(all_dates, all_places_train, df_train, pl):
     #
-    df_X_test = df_test.drop(['Place_ID X Date'])
-    return df_X_test, df_X_train
+    grid_train = all_places_train.join(pl.DataFrame(all_dates), how="cross")
+    df_train_complete = grid_train.join(df_train, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
+    df_train_complete
+    return (df_train_complete,)
+
+
+@app.cell
+def _(all_dates, all_places_test, df_test, pl):
+    #
+    grid_test = all_places_test.join(pl.DataFrame(all_dates), how="cross")
+    df_test_complete = grid_test.join(df_test, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
+    df_test_complete
+    return (df_test_complete,)
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.3. Normalización
+    ## 2.3. ...
     """)
     return
 
 
 @app.cell
-def _(df_X_train, pl):
-    numerical_features = (
-        df_X_train.select(pl.selectors.numeric().exclude(["target"])).columns
-    )
+def _(df_train_complete, numerical_features_cols, pl):
+    #
+    lags = [1,2,7]
 
-    df_X_train_norm = df_X_train.with_columns(
+    #
+    df_train_extended = df_train_complete.with_columns(
         [
-            ((pl.col(c) - pl.col(c).mean()) / pl.col(c).std()).alias(c)
-            for c in numerical_features
+            pl.col(c).shift(lag).over("Place_ID").alias(f"{c}_lag{lag}")
+            for c in numerical_features_cols
+            for lag in lags
         ]
     )
-    df_X_train_norm
-    return df_X_train_norm, numerical_features
+    df_train_extended
+    return df_train_extended, lags
 
 
 @app.cell
-def _(df_X_test, numerical_features, pl):
-    df_X_test_norm = df_X_test.with_columns(
+def _(df_test_complete, lags, numerical_features_cols, pl):
+    #
+    df_test_extended = df_test_complete.with_columns(
         [
-            ((pl.col(c) - pl.col(c).mean()) / pl.col(c).std()).alias(c)
-            for c in numerical_features
+            pl.col(c).shift(lag).over("Place_ID").alias(f"{c}_lag{lag}")
+            for c in numerical_features_cols
+            for lag in lags
         ]
     )
-    _cols = df_X_test_norm.columns
-    _cols.insert(2, pl.lit(None).cast(pl.Int16).alias('target'))
-    df_X_test_norm = df_X_test_norm.select(_cols) 
-    df_X_test_norm
-    return (df_X_test_norm,)
+    df_test_extended
+    return (df_test_extended,)
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.4.
+    ## 2.4. Normalización
     """)
     return
 
 
 @app.cell
-def _(df_X_train_norm, pl):
-    global_start_date = df_X_train_norm["Date"].min()
+def _():
+    import re
 
-    df_X_train_with_time = df_X_train_norm.with_columns(
-        ((pl.col("Date") - global_start_date).dt.total_days()).cast(pl.Int64).alias("time_idx")
-    )
-    _cols = ["time_idx"] + [c for c in df_X_train_with_time.columns if c != "time_idx"]
-    df_X_train_with_time = df_X_train_with_time[_cols].drop('Date')
-    df_X_train_with_time
-    return df_X_train_with_time, global_start_date
+    #
+    def base_col(col: str) -> str:
+        return re.sub(r"_lag\d+$", "", col)
+    return (base_col,)
 
 
 @app.cell
-def _(df_X_test_norm, global_start_date, pl):
-    df_X_test_with_time = df_X_test_norm.with_columns(
-        ((pl.col("Date") - global_start_date).dt.total_days()).cast(pl.Int64).alias("time_idx")
-    )
-    _cols = ["time_idx"] + [c for c in df_X_test_with_time.columns if c != "time_idx"]
-    df_X_test_with_time = df_X_test_with_time[_cols].drop('Date')
-    df_X_test_with_time
-    return (df_X_test_with_time,)
+def _(df_train_extended, numerical_features_cols):
+    # 
+    scalers = {}
+    for col in numerical_features_cols:
+        mean = df_train_extended[col].mean()
+        std = df_train_extended[col].std()
+        scalers[col] = (mean, std)
+    return (scalers,)
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""
-    ## 2.5. Data Expansion
-    """)
-    return
-
-
-@app.cell
-def _(df_X_test_with_time, df_X_train_with_time):
-    def expand_data(df):
-
-        all_time_idx = df['time_idx'].unique()
-        all_places = df['Place_ID'].unique()
-        skeleton = all_time_idx.to_frame().join(all_places.to_frame(), how="cross")
-
-        df_expanded = skeleton.join(df, on=["time_idx", "Place_ID"], how="left").sort(["Place_ID", "time_idx"])
-
-        return df_expanded
-
-    df_X_train_expanded = expand_data(df_X_train_with_time)
-    df_X_test_expanded = expand_data(df_X_test_with_time)
-    return df_X_test_expanded, df_X_train_expanded
-
-
-@app.cell
-def _(df_X_train_expanded):
-    df_X_train_expanded
-    return
-
-
-@app.cell
-def _(df_X_test_expanded):
-    df_X_test_expanded
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 2.6. Null Mask Fill
-    """)
-    return
-
-
-@app.cell
-def _(df_X_test_expanded, df_X_train_expanded, numerical_features, pl):
-    numerical_cols = ['target'] + numerical_features
-
-    def apply_null_mask_and_fill(df: pl.DataFrame, cols: list) -> pl.DataFrame:
-        # Crear las máscaras: 1.0 si no es nulo, 0.0 si es nulo
-        mask_exprs = [
-            (pl.col(c).is_not_null().cast(pl.Float32)).alias(f"{c}_mask")
-            for c in cols
+def _(base_col, df_train_extended, pl, scalers):
+    #
+    df_train_norm = df_train_extended.with_columns(
+        [   (
+                (pl.col(col) - scalers[base_col(col)][0]) / scalers[base_col(col)][1]
+            ).alias(col)
+            for col in df_train_extended.columns
+            if base_col(col) in scalers
         ]
-    
-        df_transformed = df.with_columns(mask_exprs)
-    
-        # Rellenar los nulos originales con 0.0
-        return df_transformed.fill_null(0.0)
-
-
-    df_X_train_null_mask = apply_null_mask_and_fill(df_X_train_expanded, numerical_cols)
-    df_X_test_null_mask = apply_null_mask_and_fill(df_X_test_expanded, numerical_cols)
-    return df_X_test_null_mask, df_X_train_null_mask
-
-
-@app.cell
-def _(df_X_train_null_mask):
-    df_X_train_null_mask
-    return
-
-
-@app.cell
-def _(df_X_test_null_mask):
-    df_X_test_null_mask
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 2.7. Unification
-    """)
-    return
-
-
-@app.cell
-def _(df_X_test_null_mask, df_X_train_null_mask, pl):
-    df_final = pl.concat(
-        [
-            df_X_train_null_mask,
-            df_X_test_null_mask,
-        ],
-        how="vertical",
     )
-    df_final
-    return (df_final,)
+    df_train_norm
+    return (df_train_norm,)
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""
-    # 3. ...
-    """)
-    return
-
-
-@app.cell
-def _(df_final):
-    from pytorch_forecasting import TimeSeriesDataSet, GroupNormalizer
-
-    # Definir las columnas de máscara generadas por tu transformer
-    mask_columns = [c for c in df_final.columns if c.endswith("_mask")]
-
-    max_prediction_length = 7 # Cuántos días quieres predecir
-    max_encoder_length = 21    # Cuánto historial mirar
-
-    training = TimeSeriesDataSet(
-        df_final,
-        time_idx="time_idx",
-        target="target",
-        group_ids=["Place_ID"],
-        min_encoder_length=max_encoder_length // 2, 
-        max_encoder_length=max_encoder_length,
-        min_prediction_length=1,
-        max_prediction_length=max_prediction_length,
-        static_categoricals=["Place_ID"],
-        # IMPORTANTE: Las máscaras son "Known" porque sabes qué días fallan en test
-        time_varying_known_reals=["time_idx"] + mask_columns,
-        # El target y las x_i son "Unknown" porque dependen del momento
-        time_varying_unknown_reals=["target"] + [f"x_{i}" for i in range(1, 75)],
-        add_relative_time_idx=True,
-        add_target_scales=True,
-        add_encoder_gradient_stats=True,
+def _(base_col, df_test_extended, pl, scalers):
+    #
+    df_test_norm = df_test_extended.with_columns(
+        [   (
+                (pl.col(col) - scalers[base_col(col)][0]) / scalers[base_col(col)][1]
+            ).alias(col)
+            for col in df_test_extended.columns
+            if base_col(col) in scalers
+        ]
     )
+    df_test_norm
+    return (df_test_norm,)
 
-    # Crear dataloaders para PyTorch
-    batch_size = 94
-    train_dataloader = training.to_dataloader(train=True, batch_size=batch_size, num_workers=0)
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.5. ...
+    """)
+    return
+
+
+@app.cell
+def _(df_train, df_train_norm):
+    df_train_reduced = df_train['Place_ID','Date'].join(df_train_norm, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
+    df_train_reduced
+    return (df_train_reduced,)
+
+
+@app.cell
+def _(df_test, df_test_norm):
+    df_test_reduced = df_test['Place_ID','Date'].join(df_test_norm, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
+    df_test_reduced
+    return (df_test_reduced,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.5. ...
+    """)
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(base_col, df_train_reduced, np, numerical_features_cols):
+    X_train = np.array([
+        df_train_reduced[c] for c in df_train_reduced.columns
+        if base_col(c) in numerical_features_cols
+    ]).T
+    X_train
+    return (X_train,)
+
+
+@app.cell
+def _(base_col, df_test_reduced, np, numerical_features_cols):
+    X_test = np.array([
+        df_test_reduced[c] for c in df_test_reduced.columns
+        if base_col(c) in numerical_features_cols
+    ]).T
+    X_test
+    return (X_test,)
+
+
+@app.cell
+def _(df_train_reduced, np):
+    y_train = np.array(df_train_reduced['target'])
+    y_train
+    return (y_train,)
+
+
+@app.cell
+def _(np, y_train):
+    n_bins = 100
+    quantiles = np.quantile(y_train, q=np.linspace(0, 1, n_bins + 1))
+    y_train_binned = np.digitize(y_train, quantiles[1:-1])
+    return (y_train_binned,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # 3. Modelos entrenados
+    """)
     return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    # 3. Elección de hiperparámetros
+    ## 3.1. Modelo LigthGBM
     """)
     return
 
 
 @app.cell
-def _(KFold, lgb, np, optuna, root_mean_squared_error):
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
+def _(
+    StratifiedKFold,
+    X_train,
+    np,
+    optuna,
+    root_mean_squared_error,
+    y_train,
+    y_train_binned,
+):
+    import lightgbm as lgb
 
-    def objective(trial, X, y):
-        param = {
-            'objective': 'regression',
-            'metric': 'rmse',
-            'boosting_type': 'gbdt',
-            'verbosity': -1,
+    FIXED_PARAMS_LGBM = {
+        'objective': 'regression',
+        'metric': 'rmse',
+        'boosting_type': 'gbdt',
+        'verbosity': -1,
+    }
+
+    def objective_LGBM(trial, X, y, y_binned):
+
+        tuned_params = {
             'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-            'max_depth': trial.suggest_int('max_depth',3,15), 
+            'max_depth': trial.suggest_int('max_depth',3,12), 
             'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
             'feature_fraction': trial.suggest_float('feature_fraction', 0.4, 1.0),
             'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
         }
 
-        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        param = {**FIXED_PARAMS_LGBM, **tuned_params}
+
+        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
         rmse_scores = []
 
-        for train_idx, val_idx in kf.split(X):
+        for train_idx, val_idx in skf.split(X, y_binned):
             X_t, X_v = X[train_idx], X[val_idx]
             y_t, y_v = y[train_idx], y[val_idx]
 
@@ -409,55 +440,252 @@ def _(KFold, lgb, np, optuna, root_mean_squared_error):
             rmse_scores.append(rmse)
 
         return np.mean(rmse_scores)
-    return (objective,)
 
 
-@app.cell
-def _(X_train_full, objective, optuna, y_train_full):
-    study = optuna.create_study(direction="minimize")
-
-    study.optimize(
-        lambda trial: objective(trial, X_train_full, y_train_full),
-        n_trials=50,
+    study_LGBM = optuna.create_study(direction='minimize')
+    study_LGBM.optimize(
+        lambda trial: objective_LGBM(trial, X_train, y_train, y_train_binned), 
+        n_trials=30,
         show_progress_bar=True
     )
-    return (study,)
+    return FIXED_PARAMS_LGBM, lgb, study_LGBM
 
 
 @app.cell
-def _(study):
-    print("Mejores hiperparámetros:", study.best_params)
-    print("Mejor RMSE:", study.best_value)
+def _(FIXED_PARAMS_LGBM, study_LGBM):
+    print("Mejores hiperparámetros:", study_LGBM.best_params)
+    print("Mejor RMSE:", study_LGBM.best_value)
+    best_params_LGBM = {**FIXED_PARAMS_LGBM, **study_LGBM.best_params}
+    return (best_params_LGBM,)
+
+
+@app.cell
+def _(X_test, X_train, best_params_LGBM, df_test, lgb, pl, y_train):
+    model_LGBM = lgb.LGBMRegressor(**best_params_LGBM)
+    model_LGBM.fit(X_train, y_train)
+
+    _test_preds = model_LGBM.predict(X_test)
+
+    results_test_LGBM = df_test.select(
+        pl.col('Place_ID X Date'),
+        pl.lit(_test_preds).alias('target')
+    )
+    # results_test_LGBM.write_csv("submission/submission_12.csv")
+    results_test_LGBM
     return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 4. Entrenamiento e inferencia del modelo final
+    ### Análisis del error
     """)
     return
 
 
 @app.cell
-def _(X_test_final, X_train_final, lgb, study, y_train_final):
-    best_params = study.best_params
+def _(
+    StratifiedKFold,
+    X_train,
+    best_params_LGBM,
+    lgb,
+    np,
+    plt,
+    y_train,
+    y_train_binned,
+):
+    def _():
 
-    final_model = lgb.LGBMRegressor(**best_params)
-    final_model.fit(X_train_final, y_train_final)
+        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
 
-    y_test = final_model.predict(X_test_final)
-    return (y_test,)
+        y_true = y_train
+        y_pred = np.zeros(len(y_true))
+
+        for train_idx, val_idx in skf.split(X_train, y_train_binned):
+            X_t, X_v = X_train[train_idx], X_train[val_idx]
+            y_t, y_v = y_train[train_idx], y_train[val_idx]
+
+            model_LGBM = lgb.LGBMRegressor(**best_params_LGBM)
+            model_LGBM.fit(
+                X_t, y_t,
+                eval_set=[(X_v, y_v)],
+                callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=0), lgb.log_evaluation(0)]
+            )
+
+            y_pred[val_idx] = model_LGBM.predict(X_v)
+
+            error = y_pred - y_true
+
+        abs_error = np.abs(error)
+        rel_error = abs_error / (y_true + 1e-6)
+
+        plt.scatter(y_true, y_pred, alpha=0.3)
+        return plt.plot([0, max(y_train)], [0, max(y_train)], 'r--')
+
+    _()
+    return
 
 
 @app.cell
-def _(df_test, pl, y_test):
-    results_test = df_test.select(
-        pl.col('Place_ID X Date'),
-        pl.lit(y_test).alias('target')
+def _(mo):
+    mo.md(r"""
+    ## 3.2. Modelo XGBoost
+    """)
+    return
+
+
+@app.cell
+def _(
+    StratifiedKFold,
+    X_train,
+    np,
+    optuna,
+    root_mean_squared_error,
+    y_train,
+    y_train_binned,
+):
+    import xgboost as xgb
+    xgb.set_config(verbosity=0)
+
+    FIXED_PARAMS_XGB = {
+        "objective": "reg:squarederror",
+        "eval_metric": "rmse",
+        "tree_method": "hist",
+        "device": "cuda",
+        "booster": "gbtree",
+        "verbosity": 0,
+        "random_state": 42,
+        "n_jobs": -1,
+        "early_stopping": 30,
+    }
+
+    def objective_XGB(trial, X, y, y_binned):
+
+        # tuned_params = {
+        #     "learning_rate": trial.suggest_float("learning_rate", 0.025, 0.3, log=True),
+        #     "n_estimators": trial.suggest_int("n_estimators", 1100, 1150),
+        #     "subsample": trial.suggest_float("subsample", 0.70, 0.75),
+        #     "colsample_bytree": trial.suggest_float("colsample_bytree", 0.65, 0.7),
+        #     "max_depth": trial.suggest_int("max_depth", 8, 9),
+        #     "min_child_weight": trial.suggest_int("min_child_weight", 3, 4),
+        #     "gamma": trial.suggest_float("gamma", 2.3, 2.4),
+        # }
+
+        tuned_params = {
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 500, 1200),
+            "subsample": trial.suggest_float("subsample", 0.6, 0.9),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 0.9),
+            "max_depth": trial.suggest_int("max_depth", 4, 8),
+            "min_child_weight": trial.suggest_int("min_child_weight", 1, 20),
+            "gamma": trial.suggest_float("gamma", 1, 5),
+        }
+
+        param = {**FIXED_PARAMS_XGB, **tuned_params}
+
+        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
+        rmse_scores = []
+
+        for train_idx, val_idx in skf.split(X, y_binned):
+            X_t, X_v = X[train_idx], X[val_idx]
+            y_t, y_v = y[train_idx], y[val_idx]
+
+            model = xgb.XGBRegressor(**param)
+            model.fit(
+                X_t, y_t,
+                eval_set=[(X_v, y_v)],
+                verbose=False,
+            )
+
+            preds = model.predict(X_v)
+            rmse = root_mean_squared_error(y_v, preds)
+            rmse_scores.append(rmse)
+
+        return np.mean(rmse_scores)
+
+
+    study_XGB = optuna.create_study(direction='minimize')
+    study_XGB.optimize(
+        lambda trial: objective_XGB(trial, X_train, y_train, y_train_binned), 
+        n_trials=20,
+        show_progress_bar=True
     )
-    results_test.write_csv("submission/submission_1.csv")
-    results_test
+    return FIXED_PARAMS_XGB, study_XGB, xgb
+
+
+@app.cell
+def _(FIXED_PARAMS_XGB, study_XGB):
+    best_params_XGB = {**FIXED_PARAMS_XGB, **study_XGB.best_params}
+    print("Mejores hiperparámetros:", best_params_XGB)
+    print("Mejor RMSE:", study_XGB.best_value)
+    return (best_params_XGB,)
+
+
+@app.cell
+def _(X_test, X_train, best_params_XGB, df_test, pl, xgb, y_train):
+    model_XGB = xgb.XGBRegressor(**best_params_XGB)
+    model_XGB.fit(X_train, y_train)
+
+    _test_preds = model_XGB.predict(X_test)
+
+    results_test_XGB = df_test.select(
+        pl.col('Place_ID X Date'),
+        pl.lit(_test_preds).alias('target')
+    )
+    results_test_XGB.write_csv("submission/submission_14.csv")
+    results_test_XGB
+    return
+
+
+@app.cell
+def _(
+    StratifiedKFold,
+    X_train,
+    best_params_XGB,
+    np,
+    plt,
+    weights,
+    xgb,
+    y_train,
+    y_train_binned,
+):
+    def _():
+
+        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
+
+        y_true = y_train
+        y_pred = np.zeros(len(y_true))
+
+        for train_idx, val_idx in skf.split(X_train, y_train_binned):
+            X_t, X_v = X_train[train_idx], X_train[val_idx]
+            y_t, y_v = y_train[train_idx], y_train[val_idx]
+
+            w_t = weights[train_idx]
+
+            model_XGB = xgb.XGBRegressor(**best_params_XGB)
+            model_XGB.fit(
+                X_t, y_t,
+                eval_set=[(X_v, y_v)],
+                sample_weight=w_t,
+                verbose=False
+            )
+
+            y_pred[val_idx] = model_XGB.predict(X_v)
+
+            error = y_pred - y_true
+
+        abs_error = np.abs(error)
+        rel_error = abs_error / (y_true + 1e-6)
+
+        plt.scatter(y_true, y_pred, alpha=0.3)
+        return plt.plot([0, max(y_train)], [0, max(y_train)], 'r--')
+
+    _()
+    return
+
+
+@app.cell
+def _():
     return
 
 

@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.4"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -226,11 +226,52 @@ def _(mo):
 @app.cell
 def _(df_train, pl):
     def _():
+
+        df_gaps = (
+            df_train
+            .sort(["Place_ID", "Date"])
+            .with_columns(
+                date_diff = pl.col("Date")
+                    .diff()
+                    .over("Place_ID")
+            )
+        ).select(['Place_ID','Date','date_diff'])
+
+        # continuity_check = (
+        #     df_gaps
+        #     .group_by("Place_ID")
+        #     .agg(
+        #         is_continuous = (pl.col("date_diff") <= pl.duration(days=1))
+        #             .all()
+        #     )
+        # )
+
+        gaps = df_gaps.filter(pl.col("date_diff") > pl.duration(days=1)).select(['Place_ID','Date','date_diff'])
+
+        return gaps
+
+    _()
+    return
+
+
+@app.cell
+def _(df_train, pl):
+    df_train.filter(pl.col('Place_ID')=='T5P5MTS')
+    return
+
+
+@app.cell
+def _(df_train, pl):
+    def _():
         df_counts = df_train.group_by('Place_ID').agg(pl.len().alias('count'))
 
         percentiles = df_counts.select(
-            *[pl.col('count').quantile(p).alias(f'percentile_{int(p*100)}') 
-              for p in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]]
+            pl.col('count').min().alias('min'),
+            *[
+                pl.col('count').quantile(p).alias(f'percentile_{int(p*100)}')
+                for p in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]
+            ],
+            pl.col('count').max().alias('max')
         )
         return percentiles
 
@@ -263,8 +304,10 @@ def _(df_test, pl):
         df_counts = df_test.group_by('Place_ID').agg(pl.len().alias('count'))
 
         percentiles = df_counts.select(
+            pl.col('count').min().alias('min'),
             *[pl.col('count').quantile(p).alias(f'percentile_{int(p*100)}') 
-              for p in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]]
+              for p in [0.1, 0.25, 0.5, 0.75, 0.9, 0.95]],
+            pl.col('count').max().alias('max')
         )
         return percentiles
 
@@ -331,7 +374,7 @@ def _(pl, sklearn):
         num_dim: int = 2,
         max_iter: int = 300
     ) -> pl.DataFrame:
-    
+
         tsne = sklearn.manifold.TSNE(
             n_components=num_dim,
             max_iter=max_iter
@@ -397,18 +440,18 @@ def _(Optional, np, pl, px):
         """
         Grafica los datos de dimensionalidad reducida (2D o 3D) usando Plotly.
         """
-    
+
         # 
         columns = X_reduced.columns
         num_dim = len(columns)
-    
+
         if num_dim < 2 or num_dim > 3:
             raise ValueError(f"La dimensionalidad debe ser 2 o 3. Se detectaron {num_dim} dimensiones.")
 
         # 2. Preparar DataFrame y configuración de color
         df_plot = X_reduced
         kwargs = {}
-    
+
         if y is not None:
             # Añadir etiquetas de color
             if isinstance(y, pl.Series):
@@ -437,7 +480,7 @@ def _(Optional, np, pl, px):
                 height=height,
                 **kwargs
             )
-        
+
             # Actualizar ejes 3D
             fig.update_layout(
                 scene=dict(
@@ -466,7 +509,7 @@ def _(Optional, np, pl, px):
 
         # Ajuste de tamaño de marcador
         fig.update_traces(marker=dict(size=5))
-    
+
         fig.show()
     return (plot_reduced_data,)
 
