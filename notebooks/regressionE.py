@@ -63,21 +63,6 @@ def _():
 
 
 @app.cell
-def _():
-    # # Comprobar si CUDA está disponible
-    # print(f"CUDA disponible: {torch.cuda.is_available()}")
-
-    # # Ver el número de GPUs disponibles
-    # print(f"Número de GPUs: {torch.cuda.device_count()}")
-
-    # # Ver el nombre de la GPU actual (si hay alguna)
-    # if torch.cuda.is_available():
-    #     print(f"Nombre de la GPU: {torch.cuda.get_device_name(0)}")
-    #     print(f"ID de la GPU actual: {torch.cuda.current_device()}")
-    return
-
-
-@app.cell
 def _(mo):
     mo.md(r"""
     # 1. Carga de datos
@@ -174,14 +159,14 @@ def _(casting, df_test_raw, pl):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.2. ...
+    ## 2.2. Reconstrucción de la Serie Temporal
     """)
     return
 
 
 @app.cell
 def _(date, df_test, df_train, pl):
-    #
+    # Genera el rango completo de fechas y extrae los Place_ID únicos para asegurar la continuidad temporal
     all_dates = pl.date_range(date(2020, 1, 2), date(2020, 4, 4), "1d", eager=True).alias("Date")
     all_places_train = df_train.select("Place_ID").unique()
     all_places_test = df_test.select("Place_ID").unique()
@@ -190,7 +175,7 @@ def _(date, df_test, df_train, pl):
 
 @app.cell
 def _(all_dates, all_places_train, df_train, pl):
-    #
+    # Realiza un upsampling del set de entrenamiento: crea una fila por cada día/lugar para evitar saltos en los lags
     grid_train = all_places_train.join(pl.DataFrame(all_dates), how="cross")
     df_train_complete = grid_train.join(df_train, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
     df_train_complete
@@ -199,7 +184,7 @@ def _(all_dates, all_places_train, df_train, pl):
 
 @app.cell
 def _(all_dates, all_places_test, df_test, pl):
-    #
+    # Realiza un upsampling del set de test: asegura que la estructura temporal sea idéntica a la de entrenamiento
     grid_test = all_places_test.join(pl.DataFrame(all_dates), how="cross")
     df_test_complete = grid_test.join(df_test, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
     df_test_complete
@@ -209,40 +194,40 @@ def _(all_dates, all_places_test, df_test, pl):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.3. ...
+    ## 2.3. Generación de Variables de Retraso (Lag Features)
     """)
     return
 
 
 @app.cell
 def _(df_train_complete, numerical_features_cols, pl):
-    #
+    # Define los intervalos de retraso (en días) para capturar la inercia de las variables meteorológicas
     lags = [1,2,7]
 
-    #
-    df_train_extended = df_train_complete.with_columns(
+    # Genera las variables de retraso (lag features) para todas las columnas numéricas en el set de entrenamiento
+    df_train_full = df_train_complete.with_columns(
         [
             pl.col(c).shift(lag).over("Place_ID").alias(f"{c}_lag{lag}")
             for c in numerical_features_cols
             for lag in lags
         ]
     )
-    df_train_extended
-    return df_train_extended, lags
+    df_train_full
+    return df_train_full, lags
 
 
 @app.cell
 def _(df_test_complete, lags, numerical_features_cols, pl):
-    #
-    df_test_extended = df_test_complete.with_columns(
+    # Genera las mismas variables de retraso en el set de test para mantener la consistencia en la entrada del modelo
+    df_test_full = df_test_complete.with_columns(
         [
             pl.col(c).shift(lag).over("Place_ID").alias(f"{c}_lag{lag}")
             for c in numerical_features_cols
             for lag in lags
         ]
     )
-    df_test_extended
-    return (df_test_extended,)
+    df_test_full
+    return (df_test_full,)
 
 
 @app.cell
@@ -257,31 +242,34 @@ def _(mo):
 def _():
     import re
 
-    #
+    # Función para obtener el nombre original de la variable eliminando el sufijo del lag
+    # Esto permite que 'x_1_lag1' sea escalada usando los parámetros calculados para 'x_1'
     def base_col(col: str) -> str:
         return re.sub(r"_lag\d+$", "", col)
     return (base_col,)
 
 
 @app.cell
-def _(df_train_extended, numerical_features_cols):
-    # 
+def _(df_train_full, numerical_features_cols):
+    # Calcula y almacena la media y desviación estándar de cada característica original
+    # Solo se utiliza el set de entrenamiento para evitar el data leakage 
     scalers = {}
     for col in numerical_features_cols:
-        mean = df_train_extended[col].mean()
-        std = df_train_extended[col].std()
+        mean = df_train_full[col].mean()
+        std = df_train_full[col].std()
         scalers[col] = (mean, std)
     return (scalers,)
 
 
 @app.cell
-def _(base_col, df_train_extended, pl, scalers):
-    #
-    df_train_norm = df_train_extended.with_columns(
+def _(base_col, df_train_full, pl, scalers):
+    # Aplica la normalización Z-score a todas las columnas del set de entrenamiento
+    # Se usa base_col para aplicar la escala de la variable raíz tanto a la original como a sus lags
+    df_train_norm = df_train_full.with_columns(
         [   (
                 (pl.col(col) - scalers[base_col(col)][0]) / scalers[base_col(col)][1]
             ).alias(col)
-            for col in df_train_extended.columns
+            for col in df_train_full.columns
             if base_col(col) in scalers
         ]
     )
@@ -290,78 +278,76 @@ def _(base_col, df_train_extended, pl, scalers):
 
 
 @app.cell
-def _(base_col, df_test_extended, pl, scalers):
-    #
-    df_test_norm = df_test_extended.with_columns(
+def _(base_col, df_test_full, pl, scalers):
+    # Aplica la normalización al set de test usando estrictamente los parámetros de entrenamiento
+    df_test_norm = df_test_full.with_columns(
         [   (
                 (pl.col(col) - scalers[base_col(col)][0]) / scalers[base_col(col)][1]
             ).alias(col)
-            for col in df_test_extended.columns
+            for col in df_test_full.columns
             if base_col(col) in scalers
         ]
     )
-    df_test_norm
     return (df_test_norm,)
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.5. ...
+    ## 2.5. Alineación de Datos y Filtrado de Instancias de Entrenamiento
     """)
     return
 
 
 @app.cell
 def _(df_train, df_train_norm):
-    df_train_reduced = df_train['Place_ID','Date'].join(df_train_norm, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
-    df_train_reduced
-    return (df_train_reduced,)
+    # Filtra el set de entrenamiento extendido para conservar solo las filas que existían originalmente
+    # Esto elimina los días "vacíos" creados durante el upsampling que no tienen valor objetivo (target)
+    df_train_ready = df_train['Place_ID','Date'].join(df_train_norm, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
+    return (df_train_ready,)
 
 
 @app.cell
 def _(df_test, df_test_norm):
-    df_test_reduced = df_test['Place_ID','Date'].join(df_test_norm, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
-    df_test_reduced
-    return (df_test_reduced,)
+    # Filtra el set de test para recuperar la estructura original de la competición
+    # Mantiene las variables normalizadas y los lags para las fechas requeridas en la entrega
+    df_test_ready = df_test['Place_ID','Date'].join(df_test_norm, on=["Place_ID", "Date"], how="left").sort(["Place_ID", "Date"])
+    return (df_test_ready,)
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.5. ...
+    ## 2.6. Vectorización y Preparación de Matrices de Entrada
     """)
     return
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
-def _(base_col, df_train_reduced, np, numerical_features_cols):
+def _(base_col, df_train_ready, np, numerical_features_cols):
+    # Convierte las características de entrenamiento a un array de NumPy para el modelo
+    # Se seleccionan tanto las variables originales como sus lags mediante la función base_col
     X_train = np.array([
-        df_train_reduced[c] for c in df_train_reduced.columns
+        df_train_ready[c] for c in df_train_ready.columns
         if base_col(c) in numerical_features_cols
     ]).T
-    X_train
     return (X_train,)
 
 
 @app.cell
-def _(base_col, df_test_reduced, np, numerical_features_cols):
+def _(base_col, df_test_ready, np, numerical_features_cols):
+    # Convierte las características de test a un array de NumPy siguiendo el mismo orden de columnas
+    # Este array será la entrada final para generar las predicciones de la competición
     X_test = np.array([
-        df_test_reduced[c] for c in df_test_reduced.columns
+        df_test_ready[c] for c in df_test_ready.columns
         if base_col(c) in numerical_features_cols
     ]).T
-    X_test
     return (X_test,)
 
 
 @app.cell
-def _(df_train_reduced, np):
-    y_train = np.array(df_train_reduced['target'])
+def _(df_train_ready, np):
+    y_train = np.array(df_train_ready['target'])
     y_train
     return (y_train,)
 
@@ -546,6 +532,9 @@ def _(
 ):
     import xgboost as xgb
     xgb.set_config(verbosity=0)
+    import logging
+    # Configura el log para ver cada iteración en la consola
+    optuna.logging.get_logger("optuna").setLevel(logging.INFO)
 
     FIXED_PARAMS_XGB = {
         "objective": "reg:squarederror",
@@ -561,24 +550,14 @@ def _(
 
     def objective_XGB(trial, X, y, y_binned):
 
-        # tuned_params = {
-        #     "learning_rate": trial.suggest_float("learning_rate", 0.025, 0.3, log=True),
-        #     "n_estimators": trial.suggest_int("n_estimators", 1100, 1150),
-        #     "subsample": trial.suggest_float("subsample", 0.70, 0.75),
-        #     "colsample_bytree": trial.suggest_float("colsample_bytree", 0.65, 0.7),
-        #     "max_depth": trial.suggest_int("max_depth", 8, 9),
-        #     "min_child_weight": trial.suggest_int("min_child_weight", 3, 4),
-        #     "gamma": trial.suggest_float("gamma", 2.3, 2.4),
-        # }
-
         tuned_params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
-            "n_estimators": trial.suggest_int("n_estimators", 500, 1200),
-            "subsample": trial.suggest_float("subsample", 0.6, 0.9),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 0.9),
-            "max_depth": trial.suggest_int("max_depth", 4, 8),
-            "min_child_weight": trial.suggest_int("min_child_weight", 1, 20),
-            "gamma": trial.suggest_float("gamma", 1, 5),
+            "learning_rate": trial.suggest_float("learning_rate", 0.025, 0.5, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 1000, 1100),
+            "subsample": trial.suggest_float("subsample", 0.7, 0.8),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 0.8),
+            "max_depth": trial.suggest_int("max_depth", 8, 9),
+            "min_child_weight": trial.suggest_int("min_child_weight", 4, 12),
+            "gamma": trial.suggest_float("gamma", 1, 3),
         }
 
         param = {**FIXED_PARAMS_XGB, **tuned_params}
@@ -607,7 +586,7 @@ def _(
     study_XGB = optuna.create_study(direction='minimize')
     study_XGB.optimize(
         lambda trial: objective_XGB(trial, X_train, y_train, y_train_binned), 
-        n_trials=20,
+        n_trials=5,
         show_progress_bar=True
     )
     return FIXED_PARAMS_XGB, study_XGB, xgb
@@ -622,17 +601,23 @@ def _(FIXED_PARAMS_XGB, study_XGB):
 
 
 @app.cell
-def _(X_test, X_train, best_params_XGB, df_test, pl, xgb, y_train):
+def _(df_test_reduced):
+    df_test_reduced
+    return
+
+
+@app.cell
+def _(X_test, X_train, best_params_XGB, df_test_reduced, pl, xgb, y_train):
     model_XGB = xgb.XGBRegressor(**best_params_XGB)
     model_XGB.fit(X_train, y_train)
 
     _test_preds = model_XGB.predict(X_test)
 
-    results_test_XGB = df_test.select(
+    results_test_XGB = df_test_reduced.select(
         pl.col('Place_ID X Date'),
         pl.lit(_test_preds).alias('target')
     )
-    results_test_XGB.write_csv("submission/submission_14.csv")
+    results_test_XGB.write_csv("submission/submission_17.csv")
     results_test_XGB
     return
 
