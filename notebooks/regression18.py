@@ -32,34 +32,34 @@ def _(mo):
 
 @app.cell
 def _():
-    #
+    # Módulos estándar de Python para utilidades básicas
     import time
     import math
-    from datetime import date
+    # from datetime import date
 
-    #
+    # Bibliotecas para manejo y procesamiento de datos
     import polars as pl
     import polars.selectors as cs
     import numpy as np
 
-    #
+    # Bibliotecas para visualización de datos
     import matplotlib.pyplot as plt
     import seaborn as sns
     import plotly.express as px
     import plotly.graph_objects as go
 
-    #
+    #  Módulos de scikit-learn para modelado y evaluación
     from sklearn.model_selection import StratifiedKFold
     from sklearn.metrics import root_mean_squared_error
 
-    #
+    # Biblioteca para optimización de hiperparámetros mediante búsqueda automatizada
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    #
+    # Configuración para ignorar warnings de Python
     import warnings
     warnings.filterwarnings("ignore")
-    return StratifiedKFold, date, np, optuna, pl, plt, root_mean_squared_error
+    return StratifiedKFold, np, optuna, pl, root_mean_squared_error
 
 
 @app.cell
@@ -194,36 +194,49 @@ def _(all_dates, all_places_test, df_test, pl):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.3. Generación de Variables de Retraso (Lag Features)
+    ## 2.3. Generación de Variables de Retraso (Lag Features) y Variables de Adelanto (Lead Features)
     """)
     return
 
 
 @app.cell
 def _(df_train_complete, numerical_features_cols, pl):
-    # Define los intervalos de retraso (en días) para capturar la inercia de las variables meteorológicas
-    lags = [1,2,7]
+    # Definimos los intervalos de retraso (pasado) y adelanto (futuro)
+    lags = [1, 2, 7]
+    leads = [1]
 
-    # Genera las variables de retraso (lag features) para todas las columnas numéricas en el set de entrenamiento
+    # Generamos las variables de retraso y adelanto en un solo paso
     df_train_full = df_train_complete.with_columns(
         [
+            # Lags: Valores de días anteriores
             pl.col(c).shift(lag).over("Place_ID").alias(f"{c}_lag{lag}")
             for c in numerical_features_cols
             for lag in lags
+        ] +
+        [
+            # Leads: Valores de días posteriores
+            pl.col(c).shift(-lead).over("Place_ID").alias(f"{c}_lead{lead}")
+            for c in numerical_features_cols
+            for lead in leads
         ]
     )
     df_train_full
-    return df_train_full, lags
+    return df_train_full, lags, leads
 
 
 @app.cell
-def _(df_test_complete, lags, numerical_features_cols, pl):
-    # Genera las mismas variables de retraso en el set de test para mantener la consistencia en la entrada del modelo
+def _(df_test_complete, lags, leads, numerical_features_cols, pl):
+    # Genera las mismas variables de retraso y adelanto en el conjunto test
     df_test_full = df_test_complete.with_columns(
         [
             pl.col(c).shift(lag).over("Place_ID").alias(f"{c}_lag{lag}")
             for c in numerical_features_cols
             for lag in lags
+        ] +
+        [
+            pl.col(c).shift(-lead).over("Place_ID").alias(f"{c}_lead{lead}")
+            for c in numerical_features_cols
+            for lead in leads
         ]
     )
     df_test_full
@@ -242,10 +255,10 @@ def _(mo):
 def _():
     import re
 
-    # Función para obtener el nombre original de la variable eliminando el sufijo del lag
+    # Función para obtener el nombre original de la variable eliminando el sufijo del lag/lead
     # Esto permite que 'x_1_lag1' sea escalada usando los parámetros calculados para 'x_1'
     def base_col(col: str) -> str:
-        return re.sub(r"_lag\d+$", "", col)
+        return re.sub(r"_(lag|lead)\d+$", "", col)
     return (base_col,)
 
 
@@ -264,7 +277,7 @@ def _(df_train_full, numerical_features_cols):
 @app.cell
 def _(base_col, df_train_full, pl, scalers):
     # Aplica la normalización Z-score a todas las columnas del set de entrenamiento
-    # Se usa base_col para aplicar la escala de la variable raíz tanto a la original como a sus lags
+    # Se usa base_col para aplicar la escala de la variable raíz tanto a la original como a sus lags/leads
     df_train_norm = df_train_full.with_columns(
         [   (
                 (pl.col(col) - scalers[base_col(col)][0]) / scalers[base_col(col)][1]
@@ -288,6 +301,7 @@ def _(base_col, df_test_full, pl, scalers):
             if base_col(col) in scalers
         ]
     )
+    df_test_norm
     return (df_test_norm,)
 
 
@@ -363,159 +377,7 @@ def _(np, y_train):
 @app.cell
 def _(mo):
     mo.md(r"""
-    # 3. Modelos entrenados
-    """)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 3.1. Modelo LigthGBM
-    """)
-    return
-
-
-@app.cell
-def _(
-    StratifiedKFold,
-    X_train,
-    np,
-    optuna,
-    root_mean_squared_error,
-    y_train,
-    y_train_binned,
-):
-    import lightgbm as lgb
-
-    FIXED_PARAMS_LGBM = {
-        'objective': 'regression',
-        'metric': 'rmse',
-        'boosting_type': 'gbdt',
-        'verbosity': -1,
-    }
-
-    def objective_LGBM(trial, X, y, y_binned):
-
-        tuned_params = {
-            'num_leaves': trial.suggest_int('num_leaves', 2, 256),
-            'max_depth': trial.suggest_int('max_depth',3,12), 
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
-            'feature_fraction': trial.suggest_float('feature_fraction', 0.4, 1.0),
-            'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-        }
-
-        param = {**FIXED_PARAMS_LGBM, **tuned_params}
-
-        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
-        rmse_scores = []
-
-        for train_idx, val_idx in skf.split(X, y_binned):
-            X_t, X_v = X[train_idx], X[val_idx]
-            y_t, y_v = y[train_idx], y[val_idx]
-
-            model = lgb.LGBMRegressor(**param)
-            model.fit(
-                X_t, y_t,
-                eval_set=[(X_v, y_v)],
-                callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=0), lgb.log_evaluation(0)]
-            )
-
-            preds = model.predict(X_v)
-            rmse = root_mean_squared_error(y_v, preds)
-            rmse_scores.append(rmse)
-
-        return np.mean(rmse_scores)
-
-
-    study_LGBM = optuna.create_study(direction='minimize')
-    study_LGBM.optimize(
-        lambda trial: objective_LGBM(trial, X_train, y_train, y_train_binned), 
-        n_trials=30,
-        show_progress_bar=True
-    )
-    return FIXED_PARAMS_LGBM, lgb, study_LGBM
-
-
-@app.cell
-def _(FIXED_PARAMS_LGBM, study_LGBM):
-    print("Mejores hiperparámetros:", study_LGBM.best_params)
-    print("Mejor RMSE:", study_LGBM.best_value)
-    best_params_LGBM = {**FIXED_PARAMS_LGBM, **study_LGBM.best_params}
-    return (best_params_LGBM,)
-
-
-@app.cell
-def _(X_test, X_train, best_params_LGBM, df_test, lgb, pl, y_train):
-    model_LGBM = lgb.LGBMRegressor(**best_params_LGBM)
-    model_LGBM.fit(X_train, y_train)
-
-    _test_preds = model_LGBM.predict(X_test)
-
-    results_test_LGBM = df_test.select(
-        pl.col('Place_ID X Date'),
-        pl.lit(_test_preds).alias('target')
-    )
-    # results_test_LGBM.write_csv("submission/submission_12.csv")
-    results_test_LGBM
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ### Análisis del error
-    """)
-    return
-
-
-@app.cell
-def _(
-    StratifiedKFold,
-    X_train,
-    best_params_LGBM,
-    lgb,
-    np,
-    plt,
-    y_train,
-    y_train_binned,
-):
-    def _():
-
-        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
-
-        y_true = y_train
-        y_pred = np.zeros(len(y_true))
-
-        for train_idx, val_idx in skf.split(X_train, y_train_binned):
-            X_t, X_v = X_train[train_idx], X_train[val_idx]
-            y_t, y_v = y_train[train_idx], y_train[val_idx]
-
-            model_LGBM = lgb.LGBMRegressor(**best_params_LGBM)
-            model_LGBM.fit(
-                X_t, y_t,
-                eval_set=[(X_v, y_v)],
-                callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=0), lgb.log_evaluation(0)]
-            )
-
-            y_pred[val_idx] = model_LGBM.predict(X_v)
-
-            error = y_pred - y_true
-
-        abs_error = np.abs(error)
-        rel_error = abs_error / (y_true + 1e-6)
-
-        plt.scatter(y_true, y_pred, alpha=0.3)
-        return plt.plot([0, max(y_train)], [0, max(y_train)], 'r--')
-
-    _()
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 3.2. Modelo XGBoost
+    # 3. Entrenamiento e inferencia del modelo XGBoost
     """)
     return
 
@@ -532,9 +394,6 @@ def _(
 ):
     import xgboost as xgb
     xgb.set_config(verbosity=0)
-    import logging
-    # Configura el log para ver cada iteración en la consola
-    optuna.logging.get_logger("optuna").setLevel(logging.INFO)
 
     FIXED_PARAMS_XGB = {
         "objective": "reg:squarederror",
@@ -544,7 +403,7 @@ def _(
         "booster": "gbtree",
         "verbosity": 0,
         "random_state": 42,
-        "n_jobs": -1,
+        "n_jobs": 1,
         "early_stopping": 30,
     }
 
@@ -555,17 +414,17 @@ def _(
             "n_estimators": trial.suggest_int("n_estimators", 1000, 1100),
             "subsample": trial.suggest_float("subsample", 0.7, 0.8),
             "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 0.8),
-            "max_depth": trial.suggest_int("max_depth", 8, 9),
+            "max_depth": trial.suggest_int("max_depth", 7, 8),
             "min_child_weight": trial.suggest_int("min_child_weight", 4, 12),
             "gamma": trial.suggest_float("gamma", 1, 3),
         }
 
         param = {**FIXED_PARAMS_XGB, **tuned_params}
 
-        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         rmse_scores = []
 
-        for train_idx, val_idx in skf.split(X, y_binned):
+        for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y_binned)):
             X_t, X_v = X[train_idx], X[val_idx]
             y_t, y_v = y[train_idx], y[val_idx]
 
@@ -580,13 +439,22 @@ def _(
             rmse = root_mean_squared_error(y_v, preds)
             rmse_scores.append(rmse)
 
+            trial.report(rmse, fold_idx)
+
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
         return np.mean(rmse_scores)
 
 
-    study_XGB = optuna.create_study(direction='minimize')
+    study_XGB = optuna.create_study(
+        direction='minimize', 
+        pruner=optuna.pruners.MedianPruner(n_warmup_steps=1)
+    )
+
     study_XGB.optimize(
         lambda trial: objective_XGB(trial, X_train, y_train, y_train_binned), 
-        n_trials=5,
+        n_trials=20,
         show_progress_bar=True
     )
     return FIXED_PARAMS_XGB, study_XGB, xgb
@@ -601,76 +469,18 @@ def _(FIXED_PARAMS_XGB, study_XGB):
 
 
 @app.cell
-def _(df_test_reduced):
-    df_test_reduced
-    return
-
-
-@app.cell
-def _(X_test, X_train, best_params_XGB, df_test_reduced, pl, xgb, y_train):
+def _(X_test, X_train, best_params_XGB, df_test_ready, pl, xgb, y_train):
     model_XGB = xgb.XGBRegressor(**best_params_XGB)
     model_XGB.fit(X_train, y_train)
 
     _test_preds = model_XGB.predict(X_test)
 
-    results_test_XGB = df_test_reduced.select(
+    results_test_XGB = df_test_ready.select(
         pl.col('Place_ID X Date'),
         pl.lit(_test_preds).alias('target')
     )
-    results_test_XGB.write_csv("submission/submission_17.csv")
+    results_test_XGB.write_csv("submission/submission_18.csv")
     results_test_XGB
-    return
-
-
-@app.cell
-def _(
-    StratifiedKFold,
-    X_train,
-    best_params_XGB,
-    np,
-    plt,
-    weights,
-    xgb,
-    y_train,
-    y_train_binned,
-):
-    def _():
-
-        skf = StratifiedKFold(n_splits=8, shuffle=True, random_state=42)
-
-        y_true = y_train
-        y_pred = np.zeros(len(y_true))
-
-        for train_idx, val_idx in skf.split(X_train, y_train_binned):
-            X_t, X_v = X_train[train_idx], X_train[val_idx]
-            y_t, y_v = y_train[train_idx], y_train[val_idx]
-
-            w_t = weights[train_idx]
-
-            model_XGB = xgb.XGBRegressor(**best_params_XGB)
-            model_XGB.fit(
-                X_t, y_t,
-                eval_set=[(X_v, y_v)],
-                sample_weight=w_t,
-                verbose=False
-            )
-
-            y_pred[val_idx] = model_XGB.predict(X_v)
-
-            error = y_pred - y_true
-
-        abs_error = np.abs(error)
-        rel_error = abs_error / (y_true + 1e-6)
-
-        plt.scatter(y_true, y_pred, alpha=0.3)
-        return plt.plot([0, max(y_train)], [0, max(y_train)], 'r--')
-
-    _()
-    return
-
-
-@app.cell
-def _():
     return
 
 

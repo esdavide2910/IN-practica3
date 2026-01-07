@@ -26,72 +26,39 @@ def _(mo):
     # Add the source directory to the search Python path
     import sys
     sys.path.append(str(src_dir))
+    print(f"Versión de Python: {sys.version}")
     return (datasets_dir,)
 
 
 @app.cell
 def _():
-    #
+    # Módulos estándar de Python para utilidades básicas
     import time
     import math
 
-    #
+    # Bibliotecas para manejo y procesamiento de datos
     import polars as pl
+    import polars.selectors as cs
     import numpy as np
 
-    #
+    # Bibliotecas para visualización de datos
     import matplotlib.pyplot as plt
     import seaborn as sns
     import plotly.express as px
     import plotly.graph_objects as go
 
-    #
-    from sklearn.model_selection import train_test_split
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.utils.data import Dataset, DataLoader
+    #  Módulos de scikit-learn para modelado y evaluación
     from sklearn.model_selection import StratifiedKFold
-    import xgboost as xgb
     from sklearn.metrics import root_mean_squared_error
 
-    #
+    # Biblioteca para optimización de hiperparámetros mediante búsqueda automatizada
     import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    #
+    # Configuración para ignorar warnings de Python
     import warnings
     warnings.filterwarnings("ignore")
-    return (
-        DataLoader,
-        Dataset,
-        StratifiedKFold,
-        go,
-        math,
-        nn,
-        np,
-        optuna,
-        pl,
-        root_mean_squared_error,
-        time,
-        torch,
-        train_test_split,
-        xgb,
-    )
-
-
-@app.cell
-def _(torch):
-    # Comprobar si CUDA está disponible
-    print(f"CUDA disponible: {torch.cuda.is_available()}")
-
-    # Ver el número de GPUs disponibles
-    print(f"Número de GPUs: {torch.cuda.device_count()}")
-
-    # Ver el nombre de la GPU actual (si hay alguna)
-    if torch.cuda.is_available():
-        print(f"Nombre de la GPU: {torch.cuda.get_device_name(0)}")
-        print(f"ID de la GPU actual: {torch.cuda.current_device()}")
-    return
+    return StratifiedKFold, math, np, optuna, pl, root_mean_squared_error, time
 
 
 @app.cell
@@ -104,16 +71,34 @@ def _(mo):
 
 @app.cell
 def _(datasets_dir, pl):
+    # Carga los datos de entrenamiento
     df_train_raw = pl.read_csv(datasets_dir/"train.csv")
-    df_train_raw
+    df_train_raw 
     return (df_train_raw,)
 
 
 @app.cell
 def _(datasets_dir, pl):
+    # Carga los datos de test
     df_test_raw = pl.read_csv(datasets_dir/"test.csv")
     df_test_raw
     return (df_test_raw,)
+
+
+@app.cell
+def _(df_test_raw, df_train_raw):
+    # Identifica las columnas de características identificativas
+    id_features_cols = df_test_raw.columns[0:3]
+    print(f"Columnas de características identificativas: {id_features_cols}")
+
+    # Identifica las columnas de características numéricas
+    numerical_features_cols = df_test_raw.columns[3:]
+    print(f"Columnas de características numéricas: {numerical_features_cols}")
+
+    # Identifica las columnas de valores target
+    target_cols = df_train_raw.columns[3:8]
+    print(f"Columnas de valores objetivo: {target_cols}")
+    return (numerical_features_cols,)
 
 
 @app.cell
@@ -134,6 +119,7 @@ def _(mo):
 
 @app.cell
 def _(pl):
+    # Define un diccionario con nombres de columnas como key y tipo como valor
     casting = {
         "Place_ID X Date": pl.String,
         "Date": pl.Date,
@@ -149,7 +135,7 @@ def _(pl):
 
 @app.cell
 def _(casting, df_train_raw, pl):
-    #
+    # Castea cada columna al tipo especificado en el diccionario. Por defecto, castea a Float32
     df_train = df_train_raw.select([
         pl.col(col).cast(casting[col]) if col in casting else pl.col(col).cast(pl.Float32)
         for col in df_train_raw.columns
@@ -160,7 +146,7 @@ def _(casting, df_train_raw, pl):
 
 @app.cell
 def _(casting, df_test_raw, pl):
-    #
+    # Castea cada columna al tipo especificado en el diccionario. Por defecto, castea a Float32
     df_test = df_test_raw.select([
         pl.col(col).cast(casting[col]) if col in casting else pl.col(col).cast(pl.Float32)
         for col in df_test_raw.columns
@@ -170,94 +156,136 @@ def _(casting, df_test_raw, pl):
 
 
 @app.cell
+def _(df_train):
+    df_train
+    return
+
+
+@app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.2. División de datos en características y valores objetivos
+    ## 2.2. Selección de características
     """)
     return
 
 
 @app.cell
-def _(df_test, df_train):
-    #
-    df_X_train = df_train.drop(['Place_ID','Date', 'Place_ID X Date', 
-                             'target','target_min','target_max','target_variance','target_count'])
+def _(df_train, numerical_features_cols):
+    df_X_train_1 = df_train.select(
+        [col for col in numerical_features_cols]
+    )
+    df_X_train_1
+    return (df_X_train_1,)
+
+
+@app.cell
+def _(df_test, numerical_features_cols):
+    df_X_test_1 = df_test.select(
+        [col for col in numerical_features_cols]
+    )
+    df_X_test_1
+    return (df_X_test_1,)
+
+
+@app.cell
+def _(df_train):
     df_y_train = df_train['target']
-    #
-    df_X_test = df_test.drop(['Place_ID X Date','Place_ID','Date'])
-    return df_X_test, df_X_train, df_y_train
+    df_y_train
+    return (df_y_train,)
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.3. Normalización
+    ## 2.3. Imputación de valores faltantes
     """)
     return
 
 
 @app.cell
-def _(df_X_train, pl):
-    df_X_train_norm = df_X_train.with_columns([
-        ((pl.col(col) - pl.col(col).mean()) / pl.col(col).std()).alias(col)
-        for col in df_X_train.columns
-    ])
-    df_X_train_norm
-    return (df_X_train_norm,)
+def _(df_X_test_1, df_X_train_1):
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import SimpleImputer
+    from sklearn.ensemble import HistGradientBoostingRegressor
 
+    imputer = SimpleImputer(strategy="median", add_indicator=True)
+    imputer.set_output(transform="polars")
 
-@app.cell
-def _(df_X_test, pl):
-    df_X_test_norm = df_X_test.with_columns([
-        ((pl.col(col) - pl.col(col).mean()) / pl.col(col).std()).alias(col)
-        for col in df_X_test.columns
-    ])
-    df_X_test_norm
-    return (df_X_test_norm,)
+    # 
+    df_X_train_2 = imputer.fit_transform(df_X_train_1)
+    df_X_test_2 = imputer.transform(df_X_test_1)
+    return df_X_test_2, df_X_train_2
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 2.3. Preparación del input para el modelo
+    ## 2.4. Normalización
     """)
     return
 
 
 @app.cell
-def _(np):
-    class NullMaskTransformer:
-        def __init__(self):
-            self.indices_with_null = None
+def _(df_X_test_2, df_X_train_2, pl):
+    # Crear un diccionario con mean y std solo del entrenamiento
+    scalers = {}
+    for col in df_X_train_2.columns:
+        mean = df_X_train_2[col].mean()
+        std = df_X_train_2[col].std()
+        scalers[col] = (mean, std)
 
-        def fit(self, X):
-            # Identifica qué columnas tienen nulos solo en el set de FIT (train)
-            nulls_per_col = np.isnan(X).any(axis=0)
-            self.indices_with_null = np.where(nulls_per_col)[0]
-            return self
+    # Normalizar el training set
+    df_X_train_3 = df_X_train_2.with_columns([
+        ((pl.col(col) - scalers[col][0]) / scalers[col][1]).alias(col)
+        for col in df_X_train_2.columns
+    ])
 
-        def transform(self, X):
-            # Si no hay columnas con nulos, devuelve X con ceros
-            if len(self.indices_with_null) == 0:
-                return np.nan_to_num(X, nan=0.0)
-
-            # Crea la máscara usando los índices guardados en el fit
-            X_nulls = X[:, self.indices_with_null]
-            # 1.0 si existe el dato, 0.0 si es nulo
-            nulls_mask = (~np.isnan(X_nulls)).astype(np.float32)
-
-            # Limpia originales
-            X_clean = np.nan_to_num(X, nan=0.0)
-
-            return np.concatenate([X_clean, nulls_mask], axis=1)
-
-        def fit_transform(self, X):
-            return self.fit(X).transform(X)
-    return (NullMaskTransformer,)
+    # Normalizar el test set usando los parámetros del entrenamiento
+    df_X_test_3 = df_X_test_2.with_columns([
+        ((pl.col(col) - scalers[col][0]) / scalers[col][1]).alias(col)
+        for col in df_X_test_2.columns
+    ])
+    return df_X_test_3, df_X_train_3
 
 
 @app.cell
-def _(Dataset, torch):
+def _(df_X_train_3):
+    df_X_train_3
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.5. Vectorización y Preparación de Matrices de Entrada
+    """)
+    return
+
+
+@app.cell
+def _(df_X_test_3, df_X_train_3, df_y_train, np):
+    X_train_full = np.array(df_X_train_3)
+    y_train_full = np.array(df_y_train)
+
+    X_test = np.array(df_X_test_3)
+    return X_test, X_train_full, y_train_full
+
+
+@app.cell
+def _(np, y_train_full):
+    n_bins = 100
+    quantiles = np.quantile(y_train_full, q=np.linspace(0, 1, n_bins + 1))
+    y_train_binned = np.digitize(y_train_full, quantiles[1:-1])
+    return (y_train_binned,)
+
+
+@app.cell
+def _():
+    from torch.utils.data import Dataset, DataLoader
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+
     class AirPollutionDataset(Dataset):
         def __init__(self, X, y=None):
             self.X = torch.tensor(X, dtype=torch.float32)
@@ -275,29 +303,21 @@ def _(Dataset, torch):
             if self.y is not None:
                 return self.X[idx], self.y[idx]
             return self.X[idx]
-    return (AirPollutionDataset,)
+    return AirPollutionDataset, DataLoader, nn, torch
 
 
 @app.cell
 def _(
     AirPollutionDataset,
     DataLoader,
-    NullMaskTransformer,
-    df_X_test_norm,
-    df_X_train_norm,
-    df_y_train,
-    pl,
-    train_test_split,
+    X_train_full,
+    y_train_binned,
+    y_train_full,
 ):
-    _null_mask_transformer = NullMaskTransformer()
-    X_train = _null_mask_transformer.fit_transform(df_X_train_norm)
-    X_test = _null_mask_transformer.transform(df_X_test_norm)
-
-    y_labels = pl.Series(df_y_train).qcut(20)
-    y_train = df_y_train.to_numpy()
+    from sklearn.model_selection import train_test_split
 
     X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.2, random_state=42, stratify=y_labels
+        X_train_full, y_train_full, test_size=0.2, random_state=42, stratify=y_train_binned
     )
 
     train_ds = AirPollutionDataset(X_train, y_train)
@@ -306,13 +326,13 @@ def _(
     BATCH_SIZE = 1024
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
     valid_loader = DataLoader(valid_ds, batch_size=BATCH_SIZE, shuffle=False)
-    return BATCH_SIZE, X_test, train_ds, train_loader, valid_loader
+    return BATCH_SIZE, train_ds, train_loader, valid_loader
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    # 3. Arquitectura neuronal
+    # 3. Entrenamiento e inferencia del modelo XGBoost con embeddings
     """)
     return
 
@@ -379,35 +399,8 @@ def _(nn):
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""
-    # 4. Entrenamiento de la red
-    """)
-    return
-
-
-@app.cell
-def _(np, torch):
-    def apply_mixup(x, y, alpha=0.3):
-        if alpha > 0:
-            lam = np.random.beta(alpha, alpha)
-        else:
-            lam = 1
-
-        batch_size = x.size()[0]
-        index = torch.randperm(batch_size).to(x.device)
-
-        # Mezcla lineal de dos filas y sus respectivos targets
-        mixed_x = lam * x + (1 - lam) * x[index, :]
-        mixed_y = lam * y + (1 - lam) * y[index]
-        return mixed_x, mixed_y
-    return (apply_mixup,)
-
-
-@app.cell
 def _(
     EmbeddingNet,
-    apply_mixup,
     math,
     nn,
     np,
@@ -433,7 +426,6 @@ def _(
     param_groups = [{'params': g, 'lr': l} for g, l in zip(layer_groups, _lrs)]
     WEIGHT_DECAY = 1e-2
     optimizer = torch.optim.AdamW(param_groups, weight_decay=WEIGHT_DECAY)
-    # optimizer = torch.optim.RAdam(param_groups, weight_decay=WEIGHT_DECAY)
 
     #
     NUM_EPOCHS = 100
@@ -460,10 +452,7 @@ def _(
         model.train()
         _train_mse_loss = 0
         for _x_batch, _y_batch in train_loader:
-            _x_batch, _y_batch = _x_batch.to('cuda'), _y_batch.to('cuda')
-
-            # Aplicar Mixup
-            _inputs, _targets = apply_mixup(_x_batch, _y_batch)
+            _inputs, _targets = _x_batch.to('cuda'), _y_batch.to('cuda')
 
             optimizer.zero_grad()
             _outputs = model(_inputs) 
@@ -493,7 +482,7 @@ def _(
         # Se guardan los pesos del modelo con menor pérdida en validación ----
         if _avg_valid_rmse_loss < _best_valid_loss:
             _best_valid_loss = _avg_valid_rmse_loss
-            torch.save(model.state_dict(), "models/best_model_B1.pth")
+            torch.save(model.state_dict(), "models/best_model.pth")
             status = "*" 
         else:
             status = ""
@@ -503,92 +492,8 @@ def _(
         print(f"Epoch {epoch+1:3d}  |  Train: {_avg_train_rmse_loss:.4f}  |  Val: {_avg_valid_rmse_loss:.4f} | {int(_epoch_time):4d}ms {status}")
 
     # Restaura los pesos del modelo con menor pérdida en validación -----------
-    model.load_state_dict(torch.load("models/best_model_B1.pth"))
-    return model, train_losses, valid_losses
-
-
-@app.cell
-def _(go, train_losses, valid_losses):
-    _fig = go.Figure()
-
-    # Curva de Entrenamiento
-    _fig.add_trace(go.Scatter(
-        x=list(range(1, len(train_losses) + 1)),
-        y=train_losses,
-        mode='lines+markers',
-        name='Train RMSE',
-        line=dict(color='royalblue', width=2)
-    ))
-
-    # Curva de Validación
-    _fig.add_trace(go.Scatter(
-        x=list(range(1, len(valid_losses) + 1)),
-        y=valid_losses,
-        mode='lines+markers',
-        name='Val RMSE',
-        line=dict(color='firebrick', width=2)
-    ))
-
-    # Estética del gráfico
-    _fig.update_layout(
-        title='Curvas de Entrenamiento y Validación (RMSE)',
-        xaxis_title='Época',
-        yaxis_title='Loss (RMSE)',
-        template='plotly_white',
-        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
-        hovermode='x unified'
-    )
-
-    _fig.show()
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    # 5. Inferencia del modelo final
-    """)
-    return
-
-
-@app.cell
-def _(AirPollutionDataset, BATCH_SIZE, DataLoader, X_test, model, np, torch):
-    test_ds = AirPollutionDataset(X_test)
-    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
-
-    model.eval()
-    _all_predictions = []
-
-    with torch.no_grad():
-        for _x_batch in test_loader:
-            _x_batch = _x_batch.to('cuda')
-            _prediction = model(_x_batch)
-
-            # Guardamos ambos por separado
-            _all_predictions.append(_prediction.cpu().numpy())
-
-    # Unimos los resultados de todos los batches
-    y_test_preds = np.concatenate(_all_predictions, axis=0).flatten()
-    return test_loader, y_test_preds
-
-
-@app.cell
-def _(df_test, pl, y_test_preds):
-    results_test = df_test.select(
-        pl.col('Place_ID X Date'),
-        pl.lit(y_test_preds).alias('target')
-    )
-    results_test.write_csv("submission/submission_3.csv")
-    results_test
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    # 6. Modelo con XGBoost
-    """)
-    return
+    model.load_state_dict(torch.load("models/best_model.pth"))
+    return (model,)
 
 
 @app.cell
@@ -623,20 +528,26 @@ def _(model, np, torch, train_loader, valid_loader):
 
 
 @app.cell
+def _(X_train_emb, X_val_emb, np, y_train_emb, y_val_emb):
+    X_train_full_emb = np.vstack([X_train_emb, X_val_emb])
+    y_train_full_emb = np.hstack([y_train_emb, y_val_emb])
+    return X_train_full_emb, y_train_full_emb
+
+
+@app.cell
 def _(
     StratifiedKFold,
-    X_train_emb,
-    X_val_emb,
+    X_train_full_emb,
     np,
     optuna,
     root_mean_squared_error,
-    xgb,
-    y_train_emb,
-    y_val_emb,
+    y_train_binned,
+    y_train_full_emb,
 ):
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    import xgboost as xgb
+    xgb.set_config(verbosity=0)
 
-    FIXED_PARAMS = {
+    FIXED_PARAMS_XGB = {
         "objective": "reg:squarederror",
         "eval_metric": "rmse",
         "tree_method": "hist",
@@ -644,83 +555,90 @@ def _(
         "booster": "gbtree",
         "verbosity": 0,
         "random_state": 42,
-        "n_jobs": -1,
+        "n_jobs": 1,
         "early_stopping": 30,
     }
 
-    def objective(trial, X, y):
-    
+    def objective_XGB(trial, X, y, y_binned):
+
         tuned_params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
-            "n_estimators": trial.suggest_int("n_estimators", 800, 1000),
-            "subsample": trial.suggest_float("subsample", 0.6, 0.9),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 0.9),
-            "max_depth": trial.suggest_int("max_depth", 4, 7),
-            "min_child_weight": trial.suggest_int("min_child_weight", 1, 20),
-            "gamma": trial.suggest_float("gamma", 1, 5),
+            "learning_rate": trial.suggest_float("learning_rate", 0.025, 0.5, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 1000, 1100),
+            "subsample": trial.suggest_float("subsample", 0.7, 0.8),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 0.8),
+            "max_depth": trial.suggest_int("max_depth", 7, 8),
+            "min_child_weight": trial.suggest_int("min_child_weight", 4, 12),
+            "gamma": trial.suggest_float("gamma", 1, 3),
         }
 
-        param = {**FIXED_PARAMS, **tuned_params}
-    
-        n_bins = 10
-        quantiles = np.quantile(y, q=np.linspace(0, 1, n_bins + 1))
-        y_binned = np.digitize(y, quantiles[1:-1])
+        param = {**FIXED_PARAMS_XGB, **tuned_params}
 
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         rmse_scores = []
 
-        for train_idx, val_idx in skf.split(X, y_binned):
+        for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y_binned)):
             X_t, X_v = X[train_idx], X[val_idx]
             y_t, y_v = y[train_idx], y[val_idx]
 
-            xgb_reg = xgb.XGBRegressor(**param)
-            xgb_reg.fit(
+            model = xgb.XGBRegressor(**param)
+            model.fit(
                 X_t, y_t,
                 eval_set=[(X_v, y_v)],
-                verbose=False
+                verbose=False,
             )
 
-            preds = xgb_reg.predict(X_v)
+            preds = model.predict(X_v)
             rmse = root_mean_squared_error(y_v, preds)
             rmse_scores.append(rmse)
 
+            trial.report(rmse, fold_idx)
+
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
         return np.mean(rmse_scores)
 
-    # Ejecutar el estudio
-    study = optuna.create_study(direction='minimize')
-    study.optimize(
-        lambda trial: objective(trial, np.vstack([X_train_emb, X_val_emb]), np.hstack([y_train_emb, y_val_emb])), 
+
+    study_XGB = optuna.create_study(
+        direction='minimize', 
+        pruner=optuna.pruners.MedianPruner(n_warmup_steps=1)
+    )
+
+    study_XGB.optimize(
+        lambda trial: objective_XGB(trial, X_train_full_emb, y_train_full_emb, y_train_binned), 
         n_trials=20,
         show_progress_bar=True
     )
-    return FIXED_PARAMS, study
+    return FIXED_PARAMS_XGB, study_XGB, xgb
 
 
 @app.cell
-def _(FIXED_PARAMS, study):
-    print("Mejores hiperparámetros:", study.best_params)
-    print("Mejor RMSE:", study.best_value)
-    best_params = {**FIXED_PARAMS, **study.best_params}
-    return (best_params,)
+def _(FIXED_PARAMS_XGB, study_XGB):
+    best_params_XGB = {**FIXED_PARAMS_XGB, **study_XGB.best_params}
+    print("Mejores hiperparámetros:", best_params_XGB)
+    print("Mejor RMSE:", study_XGB.best_value)
+    return (best_params_XGB,)
 
 
 @app.cell
 def _(
-    X_train_emb,
-    X_val_emb,
-    best_params,
+    AirPollutionDataset,
+    BATCH_SIZE,
+    DataLoader,
+    X_test,
+    X_train_full_emb,
+    best_params_XGB,
     get_embeddings,
     model,
-    np,
-    test_loader,
     xgb,
-    y_train_emb,
-    y_val_emb,
+    y_train_full_emb,
 ):
-    final_model = xgb.XGBRegressor(**best_params)
-    final_model.fit(np.vstack([X_train_emb, X_val_emb]), np.hstack([y_train_emb, y_val_emb]))
+    final_model = xgb.XGBRegressor(**best_params_XGB)
+    final_model.fit(X_train_full_emb, y_train_full_emb)
 
     # Extraer embeddings de Test
+    test_ds = AirPollutionDataset(X_test)
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
     X_test_emb = get_embeddings(model, test_loader, has_targets=False)
 
     # Predicción final con XGBoost
@@ -730,17 +648,12 @@ def _(
 
 @app.cell
 def _(df_test, pl, test_preds):
-    results_test2 = df_test.select(
+    results_test = df_test.select(
         pl.col('Place_ID X Date'),
         pl.lit(test_preds).alias('target')
     )
-    results_test2.write_csv("submission/submission_10.csv")
-    results_test2
-    return
-
-
-@app.cell
-def _():
+    results_test.write_csv("submission/submission_04.csv")
+    results_test
     return
 
 

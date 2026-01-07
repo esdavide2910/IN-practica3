@@ -1,145 +1,236 @@
+\section{Protocolo de validación experimental}
+
+Se han proporcionado los datos ya divididos en conjunto de entrenamiento (\textit{train}) y de test, para evitar problemas asociados al \textit{data snooping}%
+\footnote{
+    El \textbf{\textit{data snooping}} ocurre cuando información del conjunto de test se filtra, directa o indirectamente, en el proceso de entrenamiento del modelo, lo que puede llevar a una sobreestimación del rendimiento y a modelos que no generalizan adecuadamente ante datos nuevos.
+}.
+Al proporcionar las particiones predefinidas, se garantiza que no haya contaminación entre los datos de entrenamiento y test, manteniendo así la validez de las métricas obtenidas en el test. 
+
+En cada uno de los intentos se entrenará un modelo y se inferirá con este, del que se elegirán lo hiperparámetros de la siguiente forma
+\footnote{Estos puntos no aplican a los modelos neuronales propuestos, por tratarse de arquitecturas con un elevado número de hiperparámetros y un coste computacional significativamente mayor, lo que hace inviable la validación cruzada clásica y requiere estrategias específicas como conjuntos de validación fijos.}:
+
+\begin{itemize}
+    
+    \item Se utiliza el framework \textbf{Optuna para automatizar la búsqueda de la configuración óptima de cada arquitectura} mediante optimización bayesiana. Se ejecutan al menos 20 pruebas con el objetivo de minimizar la métrica RMSE. El espacio de búsqueda incluye parámetros estructurales del modelo, así como parámetros de regularización y aprendizaje.
+    
+    \item En cada prueba, se evalúa el desempeño de cada configuración de un modelo mediante \textbf{validación cruzada} de 5 particiones (K-Fold) con mezcla aleatoria estratificada de los datos de entrenamiento en base a su valor objetivo. Esto permite obtener una estimación más robusta y menos dependiente de una única partición de los datos, reduciendo la varianza de la métrica y mejorando la capacidad de generalización del modelo seleccionado.
+    
+\end{itemize}
+
+Tras elegir la configuración de hiperparámetros que mejor RMSE arroja, se entrena un modelo final con todos los datos de entrenamiento, y se infiere los valores objetivo sobre el conjunto de test.
+
+% -------------------------------------------------------------------------------------
+
 \section{Experimentación}
 
 \renewcommand{\arraystretch}{1.4}
-\begin{table}[h!]
-    \small
-    \centering
-    \begin{tabular}{ccrrrrp{6.5cm}}
+\begin{longtable}{p{2cm} C{2.5cm}C{2.5cm}C{2.5cm}C{2.5cm}}
+    \caption{Resultados de los experimentos. Se remarcan en negrita los puntos clave de cada intento.} 
+    \label{tab:experiments_results} \\
+    
     \toprule
-    Intento & Estrategia & \multicolumn{1}{c}{Fecha} & \multicolumn{1}{c}{Hora} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Train\\[-0.8ex] Score\end{tabular}} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Test\\[-0.8ex] Score\end{tabular}} & Descripción\\ \hline
-    1 & A & 17 dic. & 20:57 & 34.52 & 38.42 & LightGBM con las características de densidad \\
-    2 & A & 18 dic. & 11:12 & 28.08 & 34.28 & LightGBM con todas las características \\ 
-    3 & B & 19 dic. & 13:46 & 18.30 & 34.39 & Red neuronal\\
-    4 & B & 19 dic. & 14:13 & 18.27 & 34.00 & Encoder neuronal y predicción con LightGBM\\ 
-    5 & C & 2 ene. & 15:33 & 27.31 & 34.19 & XGBoost\\
-    6 & C & 2 ene. & 19:33 & 30.15 & 35.07 & XGBoost con salidas logarítmicas\\
-    7 & C & 2 ene. & 20:14 & 27.28 & 35.99 & XGBoost con profundidad limitada a 6\\
-    8 & C & 3 ene. & 00:12 & 27.43 & 36.04 & XGBoost con profundidad limitada a 6 y con salidas logarítmicas\\
-    9 & - & 3 ene. & 00:55 & 28.13 & 34.46 & Código erróneo (solo usa red neuronal)\\
-    10 & B & 3 ene. & 01:18 & 28.12 & 35.21 & Encoder neuronal y predicción con XGBoost\\
-    11 & B & 4 ene. & 00:30 & 27.98 & 34.66 & Encoder neuronal y predicción con LightGBM, incluyendo día de la semana. Embedding de 64 características.\\
-    12 & B & 4 ene. & 00:50 & 28.15 & 34.52 & Encoder neuronal y predicción con LightGBM, incluyendo día de la semana. Embedding de 32 características.\\
-    13 & B & 4 ene. & 01:03 & 26.94 & 34.54 & Encoder neuronal y predicción con LightGBM, incluyendo día de la semana. Embedding de 32 características. Emplea técnicas de regularización (mixup).\\
-    14 & B & 4 ene. & 14:42 & 27.08 & 32.78 & XGBoost con nueva estrategia de imputación\\
-    15 & B & 4 ene. & 16:16 & 26.82 & 34.22 & Encoder neuronal y predicción con XGBoost, incluyendo día de la semana, con nueva estrategia de imputación\\
-    16 & ... & 4 ene. & 16:21 & ... & 33.96 & ... \\
-    17 & ... & 5 ene. & 04:28 & 25.06 & 31.16 & ... \\
-    \bottomrule
-    \end{tabular}
-    % \caption{
-    %     Resultados de intentos
-    % }
-    % \label{tab:experiments_results}
-\end{table}
+    \textbf{Intento} & \textbf{Fecha} & \textbf{Hora} & \textbf{Train Score} & \textbf{Test Score} \\ \bottomrule
+    \endfirsthead
 
-
-\renewcommand{\arraystretch}{1.4}
-\begin{table}[h!]
-    \centering
-    \begin{tabular}{C{2cm}C{3cm}C{3cm}C{3cm}C{3cm}}
+    \caption*{Resultados de los experimentos (continuación)} \\
     \toprule
-    Intento & \multicolumn{1}{c}{Fecha} & \multicolumn{1}{c}{Hora} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Train \\[-0.8ex] Score\end{tabular}} & \multicolumn{1}{c}{\begin{tabular}[c]{@{}c@{}}Test\\[-0.8ex] Score\end{tabular}} \\ \bottomrule
+    \textbf{Intento} & \textbf{Fecha} & \textbf{Hora} & \textbf{Train Score} & \textbf{Test Score} \\ \bottomrule
+    \endhead
 
-    \multirow{2}{*}{15} & 4 ene. & 16:16 & 26.82 & 34.22 \\
-    & \multicolumn{4}{p{13.25cm}}{...} \\ \hline
-
-    \multirow{2}{*}{16} & 4 ene. & 16:21 & 28.21 & 33.96 \\
-    & \multicolumn{4}{p{13.25cm}}{...} \\ \hline
-
-    \multirow{2}{*}{17} & 5 ene. & 04:28 & 25.06 & 31.16 \\
-    & \multicolumn{4}{p{13.25cm}}{Se reconstruye la serie temporal completa para que cada ubicación tuviera una secuencia diaria completa en el periodo, se crean lags (retraso) de 1, 2 y 7 días de las variables climáticas para captar tendencias y ciclos, se normalizan todas las características, y se filtran los datos para recuperar la estructura original de la competición. Finalmente, se entrena un modelo XGBoost y se inferencia en test.} \\ \hline
-
-    \multirow{2}{*}{18} & 5 ene. & 13:13 & 24.92 & 31.05 \\
-    & \multicolumn{4}{p{13.25cm}}{Se reconstruye la serie temporal completa para que cada ubicación tuviera una secuencia diaria completa en el periodo, se crean lags (retraso) de 1, 2 y 7 días y \textbf{leads (adelanto) de 1 día} de las variables climáticas para captar tendencias y ciclos, se normalizan todas las características, y se filtran los datos para recuperar la estructura original de la competición. Finalmente, se entrena un modelo XGBoost y se inferencia en test.} \\ 
+    \hline
+    \multicolumn{5}{r}{Continúa en la siguiente página...} \\
+    \endfoot
 
     \bottomrule
-    \end{tabular}
-    \caption{
-        Resultados de los experimentos
-    }
-    \label{tab:experiments_results}
-\end{table}
+    \endlastfoot
+
+    \textbf{1} & 17 ene. & 20:57 & 34.52 & 38.42 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        \textbf{Se seleccionan las características climatológicas que incluyen 'density' en su nombre}, ya que en la página se recomienda enfocarse en estas (13 características en total); \textbf{se imputan valores faltantes mediante IterativeImputer} (usando HistGradientBoostingRegressor durante 5 iteraciones, ya que no converge a partir de estas); y \textbf{se estandarizan las características}. Finalmente, se entrena un modelo LightGBM y se inferencia en test.
+    } \\ \hline
+ 
+    \textbf{2} & 18 dic. & 11:12 & 28.08  & 34.28 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Igual que el anterior intento, pero \textbf{usando todas las características climatológicas}.
+    } \\ \hline
+ 
+    \textbf{3} & 19 dic. & 13:46 & 28.17 & 34.39 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se seleccionan todas las características climatológicas; \textbf{se imputan valores faltantes mediante SimpleImputer usando mediana (sustituye los valores faltantes por la mediana de cada característica correspondiente) y añade un indicador de valores faltantes (concatena una máscara de valores faltantes al dataset)}; se normalizan las características y \textbf{se preparan los datos para alimentar una red neuronal}. Se define (con Torch) un \textbf{MultiLayer Perceptron (MLP), que incluye: \textit{Batch Normalization}, \textit{Dropout} y funciones de activación SiLu}.
+
+        La arquitectura se divide en un extractor de características (\textit{encoder}), que proyecta los datos de entrada a un espacio latente de menor dimensión o \textit{embedding}, y un regresor final encargado de la estimación del objetivo. El entrenamiento se optimiza mediante la técnica de \textit{Discriminative Learning Rates}, asignando tasas de aprendizaje diferenciales a distintos grupos de capas para permitir una convergencia más fina. Se emplea el optimizador AdamW con decaimiento de pesos (\textit{Weight Decay}) y un planificador de tasa de aprendizaje \textit{OneCycleLR}, que ajusta dinámicamente el \textit{learning rate} a lo largo de 100 épocas.
+    } \\ \hline
+ 
+    \textbf{4} & 19 dic. & 14:13 & 27.89 & 34.00 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se emplea el extractor de características del MLP definido en el anterior intento para usar los \textit{embeddings} generados por este y entrenar un modelo XGBoost con estos, e inferenciar en test. Los embeddings son de de tamaño 64.
+        
+        Es vital aumentar la regularización en el entrenamiento para que el \textit{embedding} no sobreajustara (similar score en entrenamiento y validación) y la validación cruzada posterior para escoger hiperparámetros de XGBoost no infraestimara el RMSE.
+    } \\ \hline
+ 
+    \textbf{5} & 2 ene. & 15:33 & 27.31 & 34.19 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Igual que el intento 2, pero usando XGBoost.
+    } \\ \hline
+ 
+    \textbf{6} & 2 ene. & 19:33 & 30.15 & 35.07 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Igual que el anterior intento, pero se aplica una transformación logarítmica sobre la variable objetivo antes del entrenamiento para compensar el sesgo positivo, calculando el RMSE sobre las predicciones revertidas a su escala original mediante la función exponencial. No se logran buenos resultados.
+    } \\ \hline
+ 
+    \textbf{7} & 2 ene. & 20:14 & 27.27 & 35.99 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Similar al intento 5. En un intento de reducir la brecha entre scores en entrenamiento y test, se limita a 6 niveles la profundidad de los árboles de XGBoost como medida de regularización, pero no se logran buenos resultados.
+
+        No se rechaza la hipótesis de que la brecha entre scores en entrenamiento y test se debe a que este último conjunto tiene registros significativamente diferentes a los del primero, y por ello la inferencia nunca logra medidas igual de buenas que en entrenamiento.
+    } \\ \hline
+ 
+    \textbf{8} & 3 ene. & 00:12 & 27.43 & 36.04 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Similar al intento 7, pero aplicando transformación logarítmica a la salida. 
+        
+        Dados los malos resultados obtenidos, se descarta aplicar transformación logarítmica sobre la variable objetivo, y se aumenta el límite de profundidad de los árboles de XGBoost a 8 niveles. 
+    } \\ \hline
+ 
+    \textbf{9} & 3 ene. & 00:55 & -- & 34.46 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Ejecución errónea debido a error en el código (solo usa red neuronal del intento 3)
+        
+        (Este error se arrastra hasta el intento 13. Se omiten los scripts de estos intentos.)
+    } \\ \hline
+ 
+    \textbf{10} & 3 ene. & 01:18 & -- & 35.21 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Ejecución errónea debido a error en el código (solo usa red neuronal del intento 3)
+    } \\ \hline
+ 
+    \textbf{11} & 4 ene. & 00:30 & -- & 34.66 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Ejecución errónea debido a error en el código (solo usa red neuronal del intento 3).
+    } \\ \hline
+ 
+    \textbf{12} & 4 ene. & 00:50 & 28.15 & 34.52 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Ejecución errónea debido a error en el código (solo usa red neuronal del intento 3).
+    } \\ \hline
+ 
+    \textbf{13} & 4 ene. & 01:03 & 26.94 & 34.54 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Ejecución errónea debido a error en el código (solo usa red neuronal del intento 3).
+    } \\ \hline
+ 
+    \textbf{14} & 4 ene. & 14:42 & 27.08 & 32.78 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se incluye la variable \code{weekday} codificada One-Hot (obtenida a partir de la fecha de cada registro); no se imputan valores faltantes; se estandarizan todas las variables y se entrena un modelo XGBoost y se inferencia en test. \textbf{Se deja que XGBoost maneje los valores faltantes}. 
+    } \\ \hline
+ 
+    \textbf{15} & 4 ene. & 16:17 & 26.82 & 34.22 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se realiza un preprocesamiento de datos que incluye la codificación One-Hot para la variable \code{weekday} y una \textbf{estrategia de imputación híbrida: se aplica IterativeImputer en columnas con menos del 30\% de valores ausentes, mientras que para el resto (específicamente columnas 'CH4') se utiliza SimpleImputer basado en la mediana con un indicador de valores faltantes}. Posteriormente, se estandarizan todas las variables, exceptuando la del \code{weekday}.
+
+        Se preparan los datos para entrenar un MLP (la configuración del intento 4). Se obtienen los \textbf{\textit{embeddings}} del conjunto de entrenamiento para entrenar un modelo regresor \textbf{XGBoost}. Finalmente, se obtienen los \textit{embeddings} del conjunto test y se inferencia.
+    } \\ \hline
+
+    \textbf{16} & 4 ene. & 16:21 & 28.21 & 33.96 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se realiza el mismo preprocesamiento del anterior intento, pero esta vez se entrena directamente un modelo XGBoost y se infiere en test.
+
+        Estos dos últimos intentos indican que el manejo de valores faltantes de XGBoost, visto en el intento 14, es superior a la imputación de valores con métodos como IterativeImputer o SimpleImputer. 
+    } \\ \hline
+
+    \textbf{17} & 5 ene. & 04:28 & 25.06 & 31.16 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se reconstruye la \textbf{serie temporal completa} para que cada ubicación tuviera una secuencia diaria completa en el periodo, se crean \textbf{lags (retraso) de 1, 2 y 7 días de las variables climáticas} para captar tendencias y ciclos, se normalizan todas las características, y \textbf{se filtran los datos para recuperar la estructura original de la competición}. Finalmente, se entrena un modelo XGBoost y se inferencia en test. (\textbf{Los valores faltantes no se imputan. Se deja que XGBoost los maneje.})
+    } \\ \hline
+
+    \textbf{18} & 5 ene. & 13:13 & 24.92 & 31.05 \\*
+    \multicolumn{5}{p{14cm}}{\small 
+        Se reconstruye la serie temporal completa para que cada ubicación tuviera una secuencia diaria completa en el periodo, se crean lags (retraso) de 1, 2 y 7 días y \textbf{leads (adelanto) de 1 día} de las variables climáticas para captar tendencias y ciclos, se normalizan todas las características, y se filtran los datos para recuperar la estructura original de la competición. Finalmente, se entrena un modelo XGBoost y se inferencia en test.
+    } \\ 
+
+\end{longtable}
+
 
 
 %------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-\subsection{Estrategia A: \textit{Baseline}}
+% \subsection{Estrategia A: \textit{Baseline}}
 
-La primera estrategia servirá de \textit{baseline} para establecer un punto de partida sólido, y familiarme con el proceso de envío a la plataforma Zindi. La prioridad, será crear un \textbf{modelo simple y ligero} que permita iterar rápidamente sobre el ciclo de desarrollo y asegure la correcta lectura de los datos antes de aplicar técnicas más complejas.
+% La primera estrategia servirá de \textit{baseline} para establecer un punto de partida sólido, y familiarme con el proceso de envío a la plataforma Zindi. La prioridad, será crear un \textbf{modelo simple y ligero} que permita iterar rápidamente sobre el ciclo de desarrollo y asegure la correcta lectura de los datos antes de aplicar técnicas más complejas.
 
-Esta implementación incluye los siguientes elementos en el preprocesamiento de datos:
+% Esta implementación incluye los siguientes elementos en el preprocesamiento de datos:
 
-\begin{itemize}
+% \begin{itemize}
     
-    \item \textbf{Correción de tipos:} Se optimiza la estructura del \textit{dataframe} asignando tipos de datos eficientes para reducir el consumo de memoria y facilitar el procesamiento posterior. 
+%     \item \textbf{Correción de tipos:} Se optimiza la estructura del \textit{dataframe} asignando tipos de datos eficientes para reducir el consumo de memoria y facilitar el procesamiento posterior. 
     
-    Específicamente: 
+%     Específicamente: 
     
-    \begin{itemize} 
-        \item La columna \code{Place\_ID} se convierten a categórica (Categorical), lo cual es computacionalmente más eficiente que las cadenas de texto. 
-        \item La columna \code{Date} se transforma al formato de fecha estricto (Date) para permitir su manejo en series temporales. 
-        \item Las variables relacionadas con el objetivo (\code{target}, \code{target\_min}, \code{target\_max}, etc.) se ajustan a enteros de 16 bits, suficientes para representar los niveles de concentración de PM2.5. 
-        \item El resto de variables numéricas, que incluyen las mediciones satelitales y meteorológicas, se estandarizan a flotantes de 32 bits (Float32) mediante una iteración sobre las columnas restantes. 
-    \end{itemize}
+%     \begin{itemize} 
+%         \item La columna \code{Place\_ID} se convierten a categórica (Categorical), lo cual es computacionalmente más eficiente que las cadenas de texto. 
+%         \item La columna \code{Date} se transforma al formato de fecha estricto (Date) para permitir su manejo en series temporales. 
+%         \item Las variables relacionadas con el objetivo (\code{target}, \code{target\_min}, \code{target\_max}, etc.) se ajustan a enteros de 16 bits, suficientes para representar los niveles de concentración de PM2.5. 
+%         \item El resto de variables numéricas, que incluyen las mediciones satelitales y meteorológicas, se estandarizan a flotantes de 32 bits (Float32) mediante una iteración sobre las columnas restantes. 
+%     \end{itemize}
 
-    \item \textbf{División de características y valores objetivo:} Se divide el dataframe de entrenamiento en dos: \code{X}, con las características ...; e \code{y}, con los valores objetivo (\code{target}). 
+%     \item \textbf{División de características y valores objetivo:} Se divide el dataframe de entrenamiento en dos: \code{X}, con las características ...; e \code{y}, con los valores objetivo (\code{target}). 
     
-    \item \textbf{Normalización:} Se estandarizan las variables numéricas (media 0 y desviación típica 1).
+%     \item \textbf{Normalización:} Se estandarizan las variables numéricas (media 0 y desviación típica 1).
     
-    \item \textbf{Imputación de valores faltantes:} El gran reto del problema es la presencia de valores faltantes en la mayoría de variables. 68 de las 76 columnas tienen valores nulos, de las cuales 61 tienen un 28\% o menos valores faltantes y 7 (las de CH4) tienen valores faltantes en más del 80\% de los ejemplos.
+%     \item \textbf{Imputación de valores faltantes:} El gran reto del problema es la presencia de valores faltantes en la mayoría de variables. 68 de las 76 columnas tienen valores nulos, de las cuales 61 tienen un 28\% o menos valores faltantes y 7 (las de CH4) tienen valores faltantes en más del 80\% de los ejemplos.
     
-    Se ha optado por una \textbf{estrategia de imputación iterativa multivariante} (MICE por sus siglas en inglés). Este método de imputación funciona generando valores faltantes mediante un proceso iterativo. En cada iteración, cada variable con datos faltantes se modela condicionalmente usando las demás variables del conjunto de datos (incluyendo las ya imputadas en iteraciones previas). Este proceso se repite en ciclos hasta que los valores imputados convergen, es decir, hasta que los cambios entre iteraciones sean mínimos. Así, se preservan las relaciones estadísticas entre las variables, mejorando la precisión de la imputación frente a métodos simples como la media o la mediana.
+%     Se ha optado por una \textbf{estrategia de imputación iterativa multivariante} (MICE por sus siglas en inglés). Este método de imputación funciona generando valores faltantes mediante un proceso iterativo. En cada iteración, cada variable con datos faltantes se modela condicionalmente usando las demás variables del conjunto de datos (incluyendo las ya imputadas en iteraciones previas). Este proceso se repite en ciclos hasta que los valores imputados convergen, es decir, hasta que los cambios entre iteraciones sean mínimos. Así, se preservan las relaciones estadísticas entre las variables, mejorando la precisión de la imputación frente a métodos simples como la media o la mediana.
 
-    Para la implementación, se utiliza el \code{IterativeImputer} de Scikit-Learn con un estimador base \code{HistGradientBoostingRegressor}, ya que es capaz de capturar relaciones no lineales y es eficiente con grandes volúmenes de datos. 
+%     Para la implementación, se utiliza el \code{IterativeImputer} de Scikit-Learn con un estimador base \code{HistGradientBoostingRegressor}, ya que es capaz de capturar relaciones no lineales y es eficiente con grandes volúmenes de datos. 
     
-    \item \textbf{Selección de características:} En la página de la competición, se recomienda enfocarse en mediciones clave como las de densidad de ciertas moléculas. Por esto, la primera implementación emplea solo las variables de densidad (que incluyen `density' en su nombre). Estas son un total de 13 características. 
+%     \item \textbf{Selección de características:} En la página de la competición, se recomienda enfocarse en mediciones clave como las de densidad de ciertas moléculas. Por esto, la primera implementación emplea solo las variables de densidad (que incluyen `density' en su nombre). Estas son un total de 13 características. 
 
-\end{itemize}
+% \end{itemize}
 
 
-Se escogió LightGBM como modelo principal debido a su arquitectura basada en Gradient Boosting Decision Trees (GBDT). Esta elección se justifica por su capacidad para modelar relaciones altamente no lineales entre las variables meteorológicas y los niveles de contaminación, superando las limitaciones de los modelos lineales clásicos. Además, LightGBM es reconocido por su eficiencia computacional y velocidad de entrenamiento frente a otros métodos de \textit{ensamble}, manteniendo un rendimiento competitivo en métricas de regresión como el RMSE.
+% Se escogió LightGBM como modelo principal debido a su arquitectura basada en Gradient Boosting Decision Trees (GBDT). Esta elección se justifica por su capacidad para modelar relaciones altamente no lineales entre las variables meteorológicas y los niveles de contaminación, superando las limitaciones de los modelos lineales clásicos. Además, LightGBM es reconocido por su eficiencia computacional y velocidad de entrenamiento frente a otros métodos de \textit{ensamble}, manteniendo un rendimiento competitivo en métricas de regresión como el RMSE.
 
-Para la elección de hiperparámetros:
+% Para la elección de hiperparámetros:
 
-\begin{itemize}
+% \begin{itemize}
     
-    \item \textbf{Cross-validation:} Se implementó una estrategia de validación cruzada de 10 particiones (K-Fold) con mezcla aleatoria de los datos. En cada iteración del bucle, el conjunto de datos se divide en entrenamiento y validación; se utiliza el conjunto de validación para monitorizar el error y aplicar \textit{early stopping} (parada temprana) si el modelo no mejora tras 50 rondas, evitando así el sobreajuste.
+%     \item \textbf{Cross-validation:} Se implementó una estrategia de validación cruzada de 10 particiones (K-Fold) con mezcla aleatoria de los datos. En cada iteración del bucle, el conjunto de datos se divide en entrenamiento y validación; se utiliza el conjunto de validación para monitorizar el error y aplicar \textit{early stopping} (parada temprana) si el modelo no mejora tras 50 rondas, evitando así el sobreajuste.
     
-    \item \textbf{Optimización de parámetros:} Se utilizó el framework Optuna para automatizar la búsqueda de la configuración óptima mediante optimización bayesiana. Se ejecutaron 50 experimentos (\code{n\_trials=50}) con el objetivo de minimizar la métrica RMSE. El espacio de búsqueda incluyó parámetros estructurales del árbol como el número de hojas y la profundidad máxima, así como parámetros de regularización y aprendizaje como la tasa de aprendizaje.
+%     \item \textbf{Optimización de parámetros:} Se utilizó el framework Optuna para automatizar la búsqueda de la configuración óptima mediante optimización bayesiana. Se ejecutaron 50 experimentos (\code{n\_trials=50}) con el objetivo de minimizar la métrica RMSE. El espacio de búsqueda incluyó parámetros estructurales del árbol como el número de hojas y la profundidad máxima, así como parámetros de regularización y aprendizaje como la tasa de aprendizaje.
     
-\end{itemize}
+% \end{itemize}
 
-Esta es, a grandes rasgos, la estrategia seguida. Los resultados del primer intento (véase la Tabla \ref{tab:experiments_results}), en el que se emplearon únicamente las características relacionadas con la densidad, logran un RMSE de 38.42 en el conjunto de test.
+% Esta es, a grandes rasgos, la estrategia seguida. Los resultados del primer intento (véase la Tabla \ref{tab:experiments_results}), en el que se emplearon únicamente las características relacionadas con la densidad, logran un RMSE de 38.42 en el conjunto de test.
 
-Dado este resultado, nos planteamos si el rendimiento podría mejorarse de forma significativa \textbf{utilizando todas las características numéricas disponibles}, en lugar de solo el subconjunto inicial. Para comprobarlo, se llevó a cabo un segundo intento ---manteniendo idénticos el preprocesamiento, el algoritmo y la elección de hiperparámetros---. Esta ampliación del conjunto de características logró una mejora sustancial, reduciendo el RMSE en test a 34.28.
+% Dado este resultado, nos planteamos si el rendimiento podría mejorarse de forma significativa \textbf{utilizando todas las características numéricas disponibles}, en lugar de solo el subconjunto inicial. Para comprobarlo, se llevó a cabo un segundo intento ---manteniendo idénticos el preprocesamiento, el algoritmo y la elección de hiperparámetros---. Esta ampliación del conjunto de características logró una mejora sustancial, reduciendo el RMSE en test a 34.28.
 
-No obstante, en ambos casos se observa una brecha considerable entre el rendimiento en los conjuntos de entrenamiento y de test, con una diferencia de aproximadamente 4 puntos de RMSE. Este hecho sugiere la presencia de un cierto grado de sobreajuste (\textit{overfitting}), que persiste a pesar de haberse realizado validación cruzada durante el entrenamiento. 
+% No obstante, en ambos casos se observa una brecha considerable entre el rendimiento en los conjuntos de entrenamiento y de test, con una diferencia de aproximadamente 4 puntos de RMSE. Este hecho sugiere la presencia de un cierto grado de sobreajuste (\textit{overfitting}), que persiste a pesar de haberse realizado validación cruzada durante el entrenamiento. 
 
-%Dicha técnica debería, en principio, promover una mayor generalización del modelo. La persistencia de esta discrepancia indica que podrían ser necesarias estrategias adicionales de regularización o un ajuste más exhaustivo de los hiperparámetros para conseguir un mejor equilibrio entre sesgo y varianza.
+% %Dicha técnica debería, en principio, promover una mayor generalización del modelo. La persistencia de esta discrepancia indica que podrían ser necesarias estrategias adicionales de regularización o un ajuste más exhaustivo de los hiperparámetros para conseguir un mejor equilibrio entre sesgo y varianza.
 
-% -------------------------------------------------------------------------------------------------------------------------------------------------- %
+% % -------------------------------------------------------------------------------------------------------------------------------------------------- %
 
-\subsection{Estrategia B: Arquitectura Neuronal}
+% \subsection{Estrategia B: Arquitectura Neuronal}
 
-Mientras que la Estrategia A se centraba en un preprocesamiento estadístico clásico (MICE) y un modelo de árboles puro, esta nueva aproximación utiliza \textit{Deep Learning} para la extracción automatizada de características e inferencia.
-
-
+% Mientras que la Estrategia A se centraba en un preprocesamiento estadístico clásico (MICE) y un modelo de árboles puro, esta nueva aproximación utiliza \textit{Deep Learning} para la extracción automatizada de características e inferencia.
 
 
-arquitectura híbrida que emplea la representación de los datos (\textit{embeddings}) 
 
 
-% -------------------------------------------------------------------------------------------------------------------------------------------------- %
-
-\subsection{Estrategia C: XGBoost}
+% arquitectura híbrida que emplea la representación de los datos (\textit{embeddings}) 
 
 
-% -------------------------------------------------------------------------------------------------------------------------------------------------- %
+% % -------------------------------------------------------------------------------------------------------------------------------------------------- %
 
-\subsection{Estrategia C: Incluir información temporal}
-
-Parece razonable pensar que el valor del indicador PM2.5 de un día dependiera de los días previos en la misma localización, ya que ... ¿Cómo podemos ... ? 
+% \subsection{Estrategia C: XGBoost}
 
 
-- Entrenar solo con características meteorológicas para obtener 
+% % -------------------------------------------------------------------------------------------------------------------------------------------------- %
+
+% \subsection{Estrategia C: Incluir información temporal}
+
+% Parece razonable pensar que el valor del indicador PM2.5 de un día dependiera de los días previos en la misma localización, ya que ... ¿Cómo podemos ... ? 
+
+
+% - Entrenar solo con características meteorológicas para obtener 

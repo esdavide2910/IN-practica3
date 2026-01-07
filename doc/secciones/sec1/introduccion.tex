@@ -20,8 +20,8 @@ Trabajaremos con Python, concretamente en cuaderno \textbf{marimo} \cite{Agrawal
 
 Para gestionar las dependencias y el entorno del proyecto se ha usado el gestor de paquetes \textbf{uv} \cite{uv}, que ofrece un sistema de resolución y aislamiento extremadamente rápido. Además, uv permite crear entornos virtuales ligeros, instalar versiones específicas de paquetes y reproducir configuraciones de forma determinista, asegurando así la portabilidad y la consistencia del entorno de ejecución en distintas máquinas.
 
-Se ha creado un cuaderno para caso de estudio: \code{caseA.py} y \code{caseB.py}, en el directorio \code{notebooks/}. Para ejecutar uno de estos, solo debe ejecutar el siguiente comando desde el directorio del proyecto:
+Se ha creado un cuaderno para experimento: \code{regression01.py}, \code{regression02.py}, etc., en el directorio \code{notebooks/}. Puede ejecutar estos archivos tanto como cuaderno como archivo normal de Python. Se recomienda ejecutar como cuaderno para mayor interactividad: 
 
 \begin{lstlisting}[language=bash, backgroundcolor=\color{backcolour}, basicstyle=\ttfamily\footnotesize, frame=single]
-uv run marimo edit notebooks/caseA.py
+uv run marimo edit notebooks/regression01.py
 \end{lstlisting}

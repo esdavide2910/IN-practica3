@@ -1,0 +1,428 @@
+import marimo
+
+__generated_with = "0.18.4"
+app = marimo.App(width="full")
+
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    from pathlib import Path
+
+    # Get the path to the “notebook/” directory
+    notebook_dir = mo.notebook_dir()
+
+    # Get the path to the "datasets/" directory 
+    datasets_dir = notebook_dir.parent / "dataset"
+
+    # Get the path to the "src/" directory
+    src_dir = notebook_dir.parent / "src"
+
+    # Add the source directory to the search Python path
+    import sys
+    sys.path.append(str(src_dir))
+    print(f"Versión de Python: {sys.version}")
+    return (datasets_dir,)
+
+
+@app.cell
+def _():
+    # Módulos estándar de Python para utilidades básicas
+    import time
+    import math
+
+    # Bibliotecas para manejo y procesamiento de datos
+    import polars as pl
+    import polars.selectors as cs
+    import numpy as np
+
+    # Bibliotecas para visualización de datos
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import plotly.express as px
+    import plotly.graph_objects as go
+
+    #  Módulos de scikit-learn para modelado y evaluación
+    from sklearn.model_selection import StratifiedKFold
+    from sklearn.metrics import root_mean_squared_error
+
+    # Biblioteca para optimización de hiperparámetros mediante búsqueda automatizada
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    # Configuración para ignorar warnings de Python
+    import warnings
+    warnings.filterwarnings("ignore")
+    return StratifiedKFold, np, optuna, pl, root_mean_squared_error
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # 1. Carga de datos
+    """)
+    return
+
+
+@app.cell
+def _(datasets_dir, pl):
+    # Carga los datos de entrenamiento
+    df_train_raw = pl.read_csv(datasets_dir/"train.csv")
+    df_train_raw 
+    return (df_train_raw,)
+
+
+@app.cell
+def _(datasets_dir, pl):
+    # Carga los datos de test
+    df_test_raw = pl.read_csv(datasets_dir/"test.csv")
+    df_test_raw
+    return (df_test_raw,)
+
+
+@app.cell
+def _(df_test_raw, df_train_raw):
+    # Identifica las columnas de características identificativas
+    id_features_cols = df_test_raw.columns[0:3]
+    print(f"Columnas de características identificativas: {id_features_cols}")
+
+    # Identifica las columnas de características numéricas
+    numerical_features_cols = df_test_raw.columns[3:]
+    print(f"Columnas de características numéricas: {numerical_features_cols}")
+
+    # Identifica las columnas de valores target
+    target_cols = df_train_raw.columns[3:8]
+    print(f"Columnas de valores objetivo: {target_cols}")
+    return (numerical_features_cols,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # 2. Preprocesado de datos
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.1. Corrección de tipos
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    # Define un diccionario con nombres de columnas como key y tipo como valor
+    casting = {
+        "Place_ID X Date": pl.String,
+        "Date": pl.Date,
+        "Place_ID": pl.Categorical,
+        "target": pl.Int16,
+        "target_min": pl.Int16,
+        "target_max": pl.Int16,
+        "target_variance": pl.Float32,
+        "target_count": pl.Int16
+    }
+    return (casting,)
+
+
+@app.cell
+def _(casting, df_train_raw, pl):
+    # Castea cada columna al tipo especificado en el diccionario. Por defecto, castea a Float32
+    df_train = df_train_raw.select([
+        pl.col(col).cast(casting[col]) if col in casting else pl.col(col).cast(pl.Float32)
+        for col in df_train_raw.columns
+    ])
+    df_train
+    return (df_train,)
+
+
+@app.cell
+def _(casting, df_test_raw, pl):
+    # Castea cada columna al tipo especificado en el diccionario. Por defecto, castea a Float32
+    df_test = df_test_raw.select([
+        pl.col(col).cast(casting[col]) if col in casting else pl.col(col).cast(pl.Float32)
+        for col in df_test_raw.columns
+    ])
+    df_test
+    return (df_test,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.2. Nueva característica: día de la semana
+    """)
+    return
+
+
+@app.cell
+def _(df_train, numerical_features_cols, pl):
+    weekdays_train = df_train.select(pl.col('Date').dt.weekday()).to_dummies()
+    df_X_train_1 = pl.concat([weekdays_train,df_train[numerical_features_cols]], how="horizontal")
+    df_X_train_1
+    return (df_X_train_1,)
+
+
+@app.cell
+def _(df_test, numerical_features_cols, pl):
+    weekdays_test = df_test.select(pl.col('Date').dt.weekday()).to_dummies()
+    df_X_test_1 = pl.concat([weekdays_test,df_test[numerical_features_cols]], how="horizontal")
+    df_X_test_1
+    return (df_X_test_1,)
+
+
+@app.cell
+def _(df_train):
+    df_y_train = df_train['target']
+    df_y_train
+    return (df_y_train,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.3. Valores faltantes
+    """)
+    return
+
+
+@app.cell
+def _(df_X_test_1, df_X_train_1, numerical_features_cols):
+    from sklearn.preprocessing import FunctionTransformer
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import IterativeImputer, SimpleImputer
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    from sklearn.compose import ColumnTransformer
+
+    _cols_not_ch4 = [c for c in numerical_features_cols if "CH4" not in c]
+    _cols_ch4 = [c for c in numerical_features_cols if "CH4" in c]
+    _cols_rest = [c for c in df_X_train_1.columns if c not in _cols_not_ch4+_cols_ch4]
+
+    # IterativeImputer para columnas numéricas sin CH4
+    iter_imp = IterativeImputer(
+        estimator=HistGradientBoostingRegressor(),
+        max_iter=5,
+        random_state=42,
+        verbose=2
+    )
+    iter_imp.set_output(transform="polars")
+
+    # SimpleImputer + indicador para columnas CH4
+    simple_imp = SimpleImputer(strategy="median", add_indicator=True)
+    simple_imp.set_output(transform="polars")
+
+    #
+    def _identity_order(X):
+        return X
+
+    # ColumnTransformer combinando ambos imputers
+    _ct = ColumnTransformer(
+        transformers=[
+            ("pass", FunctionTransformer(_identity_order), _cols_rest),
+            ("iter_imp", iter_imp, _cols_not_ch4),
+            ("simple_imp", simple_imp, _cols_ch4)
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False
+    )
+    # Usar salida Polars para ColumnTransformer
+    _ct.set_output(transform="polars")
+
+    # 
+    df_X_train_2 = _ct.fit_transform(df_X_train_1)
+    df_X_test_2 = _ct.transform(df_X_test_1)
+    return df_X_test_2, df_X_train_2
+
+
+@app.cell
+def _(df_X_train_2):
+    df_X_train_2
+    return
+
+
+@app.cell
+def _(df_X_test_2):
+    df_X_test_2
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.4. Normalización
+    """)
+    return
+
+
+@app.cell
+def _(df_X_test_2, df_X_train_2, numerical_features_cols, pl):
+    # Crear un diccionario con mean y std solo del entrenamiento
+    scalers = {}
+    for col in numerical_features_cols:
+        mean = df_X_train_2[col].mean()
+        std = df_X_train_2[col].std()
+        scalers[col] = (mean, std)
+
+    # Normalizar el training set
+    df_X_train_3 = df_X_train_2.with_columns([
+        ((pl.col(col) - scalers[col][0]) / scalers[col][1]).alias(col)
+        for col in numerical_features_cols
+    ])
+
+    # Normalizar el test set usando los parámetros del entrenamiento
+    df_X_test_3 = df_X_test_2.with_columns([
+        ((pl.col(col) - scalers[col][0]) / scalers[col][1]).alias(col)
+        for col in numerical_features_cols
+    ])
+    return df_X_test_3, df_X_train_3
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## 2.5. Vectorización y Preparación de Matrices de Entrada
+    """)
+    return
+
+
+@app.cell
+def _(df_X_test_3, df_X_train_3, np):
+    X_train = np.array(df_X_train_3)
+    X_test = np.array(df_X_test_3)
+    return X_test, X_train
+
+
+@app.cell
+def _(df_y_train, np):
+    y_train = np.array(df_y_train)
+    return (y_train,)
+
+
+@app.cell
+def _(np, y_train):
+    n_bins = 100
+    quantiles = np.quantile(y_train, q=np.linspace(0, 1, n_bins + 1))
+    y_train_binned = np.digitize(y_train, quantiles[1:-1])
+    return (y_train_binned,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # 3. Entrenamiento e inferencia del modelo XGBoost
+    """)
+    return
+
+
+@app.cell
+def _(
+    StratifiedKFold,
+    X_train,
+    np,
+    optuna,
+    root_mean_squared_error,
+    y_train,
+    y_train_binned,
+):
+    import xgboost as xgb
+    xgb.set_config(verbosity=0)
+
+    FIXED_PARAMS_XGB = {
+        "objective": "reg:squarederror",
+        "eval_metric": "rmse",
+        "tree_method": "hist",
+        "device": "cuda",
+        "booster": "gbtree",
+        "verbosity": 0,
+        "random_state": 42,
+        "n_jobs": 1,
+        "early_stopping": 30,
+    }
+
+    def objective_XGB(trial, X, y, y_binned):
+
+        tuned_params = {
+            "learning_rate": trial.suggest_float("learning_rate", 0.025, 0.5, log=True),
+            "n_estimators": trial.suggest_int("n_estimators", 1000, 1100),
+            "subsample": trial.suggest_float("subsample", 0.7, 0.8),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 0.8),
+            "max_depth": trial.suggest_int("max_depth", 7, 8),
+            "min_child_weight": trial.suggest_int("min_child_weight", 4, 12),
+            "gamma": trial.suggest_float("gamma", 1, 3),
+        }
+
+        param = {**FIXED_PARAMS_XGB, **tuned_params}
+
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        rmse_scores = []
+
+        for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y_binned)):
+            X_t, X_v = X[train_idx], X[val_idx]
+            y_t, y_v = y[train_idx], y[val_idx]
+
+            model = xgb.XGBRegressor(**param)
+            model.fit(
+                X_t, y_t,
+                eval_set=[(X_v, y_v)],
+                verbose=False,
+            )
+
+            preds = model.predict(X_v)
+            rmse = root_mean_squared_error(y_v, preds)
+            rmse_scores.append(rmse)
+
+            trial.report(rmse, fold_idx)
+
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+        return np.mean(rmse_scores)
+
+
+    study_XGB = optuna.create_study(
+        direction='minimize', 
+        pruner=optuna.pruners.MedianPruner(n_warmup_steps=1)
+    )
+
+    study_XGB.optimize(
+        lambda trial: objective_XGB(trial, X_train, y_train, y_train_binned), 
+        n_trials=20,
+        show_progress_bar=True
+    )
+    return FIXED_PARAMS_XGB, study_XGB, xgb
+
+
+@app.cell
+def _(FIXED_PARAMS_XGB, study_XGB):
+    best_params_XGB = {**FIXED_PARAMS_XGB, **study_XGB.best_params}
+    print("Mejores hiperparámetros:", best_params_XGB)
+    print("Mejor RMSE:", study_XGB.best_value)
+    return (best_params_XGB,)
+
+
+@app.cell
+def _(X_test, X_train, best_params_XGB, df_test, pl, xgb, y_train):
+    model_XGB = xgb.XGBRegressor(**best_params_XGB)
+    model_XGB.fit(X_train, y_train)
+
+    _test_preds = model_XGB.predict(X_test)
+
+    results_test_XGB = df_test.select(
+        pl.col('Place_ID X Date'),
+        pl.lit(_test_preds).alias('target')
+    )
+    results_test_XGB.write_csv("submission/submission_16.csv")
+    results_test_XGB
+    return
+
+
+if __name__ == "__main__":
+    app.run()

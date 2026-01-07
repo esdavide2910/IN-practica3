@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.4"
-app = marimo.App(width="full")
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -182,7 +182,7 @@ def _(df_test, df_train, pl, px):
         #
         df_tmp = df_tmp.sort('Date')
 
-        fig = px.line(df_tmp, x='Date', y=['Train', 'Test'])
+        fig = px.line(df_tmp, x='Date', y=['Train', 'Test'], width=900, height=550)
         fig.update_xaxes(
             title_text="Date"
         )
@@ -220,43 +220,6 @@ def _(mo):
     mo.md(r"""
     - En el conjunto de entrenamiento hay 340 localizaciones distintas.
     """)
-    return
-
-
-@app.cell
-def _(df_train, pl):
-    def _():
-
-        df_gaps = (
-            df_train
-            .sort(["Place_ID", "Date"])
-            .with_columns(
-                date_diff = pl.col("Date")
-                    .diff()
-                    .over("Place_ID")
-            )
-        ).select(['Place_ID','Date','date_diff'])
-
-        # continuity_check = (
-        #     df_gaps
-        #     .group_by("Place_ID")
-        #     .agg(
-        #         is_continuous = (pl.col("date_diff") <= pl.duration(days=1))
-        #             .all()
-        #     )
-        # )
-
-        gaps = df_gaps.filter(pl.col("date_diff") > pl.duration(days=1)).select(['Place_ID','Date','date_diff'])
-
-        return gaps
-
-    _()
-    return
-
-
-@app.cell
-def _(df_train, pl):
-    df_train.filter(pl.col('Place_ID')=='T5P5MTS')
     return
 
 
@@ -306,7 +269,7 @@ def _(df_test, pl):
         percentiles = df_counts.select(
             pl.col('count').min().alias('min'),
             *[pl.col('count').quantile(p).alias(f'percentile_{int(p*100)}') 
-              for p in [0.1, 0.25, 0.5, 0.75, 0.9, 0.95]],
+              for p in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]],
             pl.col('count').max().alias('max')
         )
         return percentiles
@@ -343,7 +306,7 @@ def _(mo):
 
 @app.cell
 def _(df_train, px):
-    _fig = px.histogram(df_train, x="target", nbins=100)
+    _fig = px.histogram(df_train, x="target", nbins=100, width=800, height=500)
     _fig.show()
     return
 
@@ -356,14 +319,14 @@ def _(df_train, px):
 
 
 @app.cell
-def _(df_train, pl, px):
-    _df_train = df_train.select(
-        pl.col('target').log(base=2).alias('log_target')
-    )
-    _df_train
+def _():
+    # _df_train = df_train.select(
+    #     pl.col('target').log(base=2).alias('log_target')
+    # )
+    # _df_train
 
-    _fig = px.histogram(_df_train, x="log_target", nbins=100)
-    _fig.show()
+    # _fig = px.histogram(_df_train, x="log_target", nbins=100)
+    # _fig.show()
     return
 
 
